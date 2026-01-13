@@ -44,9 +44,17 @@ def get_basic_information(request, client_id):
 def delete_basic_information(request, client_id):
     try:
         basic_info = BasicInformation.objects.get(client_id=client_id)
+        
+        if basic_info.has_work_pension:
+            basic_info.has_work_pension.delete()
+        
+        basic_info.investment_accounts.all().delete()
+        basic_info.life_events.all().delete()
+        
         basic_info.delete()
+        
         return Response(
-            {'message': f'Basic information with client_id {client_id} has been deleted successfully.'},
+            {'message': f'Basic information with client_id {client_id} and all related data (work pension, investment accounts, life events) has been deleted successfully.'},
             status=status.HTTP_200_OK
         )
     except BasicInformation.DoesNotExist:

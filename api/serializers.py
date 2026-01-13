@@ -9,6 +9,32 @@ class WorkPensionSerializer(serializers.ModelSerializer):
         model = WorkPension
         fields = ['has_pension', 'monthly_pension_amount', 'pension_start_age']
 
+    def validate(self, data):
+        has_pension = data.get('has_pension')
+        monthly_pension_amount = data.get('monthly_pension_amount')
+        pension_start_age = data.get('pension_start_age')
+        
+        if has_pension is False:
+            if monthly_pension_amount is not None:
+                raise serializers.ValidationError({
+                    'monthly_pension_amount': 'monthly_pension_amount must be null when has_pension is false.'
+                })
+            if pension_start_age is not None:
+                raise serializers.ValidationError({
+                    'pension_start_age': 'pension_start_age must be null when has_pension is false.'
+                })
+        elif has_pension is True:
+            if monthly_pension_amount is None:
+                raise serializers.ValidationError({
+                    'monthly_pension_amount': 'monthly_pension_amount is required when has_pension is true.'
+                })
+            if pension_start_age is None:
+                raise serializers.ValidationError({
+                    'pension_start_age': 'pension_start_age is required when has_pension is true.'
+                })
+        
+        return data
+
     def validate_monthly_pension_amount(self, value):
         if value is not None:
             if value < 0:
