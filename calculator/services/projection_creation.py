@@ -18,12 +18,13 @@ OUTPUTS: Saved Projection object in database
 
 from decimal import Decimal
 from typing import List, Dict, Any
-from ..models import RetirementPlan, Projection
+from api.models import BasicInformation
+from calculator.models import Projection
 from .monte_carlo import run_monte_carlo_simulation
 
 
 def create_projection(
-    plan: RetirementPlan,
+    basic_info: BasicInformation,
     projected_savings: float,
     savings_needed: float,
     extra_savings: float,
@@ -36,7 +37,7 @@ def create_projection(
     Create and save a Projection object with all calculation results.
     
     INPUTS:
-        plan: RetirementPlan object - The retirement plan this projection belongs to
+        basic_info: BasicInformation object - The retirement plan this projection belongs to
         projected_savings: float - Projected savings at retirement
         savings_needed: float - Savings needed at retirement
         extra_savings: float - Extra savings (positive) or shortfall (negative)
@@ -52,19 +53,21 @@ def create_projection(
         This function creates a new projection. If you want to update an existing
         one, use update_projection() instead.
     """
+    retirement_age = basic_info.work_optional_age if basic_info.work_optional_age else basic_info.current_age + 30
     projection = Projection.objects.create(
-        retirement_plan=plan,
-        retirement_age=plan.work_optional_age,
+        basic_information=basic_info,
+        retirement_age=retirement_age,
         projected_savings=Decimal(str(round(projected_savings, 2))),
         savings_needed=Decimal(str(round(savings_needed, 2))),
         extra_savings=Decimal(str(round(extra_savings, 2))),
         is_on_track=is_on_track,
-        success_probability=Decimal(str(round(monte_carlo_results['success_probability'], 1))),
-        percentile_10=Decimal(str(round(monte_carlo_results['percentile_10'], 2))),
-        percentile_25=Decimal(str(round(monte_carlo_results['percentile_25'], 2))),
-        percentile_50=Decimal(str(round(monte_carlo_results['percentile_50'], 2))),
-        percentile_75=Decimal(str(round(monte_carlo_results['percentile_75'], 2))),
-        percentile_90=Decimal(str(round(monte_carlo_results['percentile_90'], 2))),
+        success_probability=Decimal(str(round(monte_carlo_results.get('success_probability', 0.0), 1))) if monte_carlo_results.get('success_probability') else None,
+        percentile_10=Decimal(str(round(monte_carlo_results.get('percentile_10', 0.0), 2))) if monte_carlo_results.get('percentile_10') is not None else None,
+        percentile_25=Decimal(str(round(monte_carlo_results.get('percentile_25', 0.0), 2))) if monte_carlo_results.get('percentile_25') is not None else None,
+        percentile_50=Decimal(str(round(monte_carlo_results.get('percentile_50', 0.0), 2))) if monte_carlo_results.get('percentile_50') is not None else None,
+        percentile_75=Decimal(str(round(monte_carlo_results.get('percentile_75', 0.0), 2))) if monte_carlo_results.get('percentile_75') is not None else None,
+        percentile_90=Decimal(str(round(monte_carlo_results.get('percentile_90', 0.0), 2))) if monte_carlo_results.get('percentile_90') is not None else None,
+        run_out_age=run_out_age,
         yearly_breakdown=yearly_breakdown,
         monte_carlo_data=monte_carlo_results,
     )
@@ -74,6 +77,7 @@ def create_projection(
 
 def update_projection(
     projection: Projection,
+    basic_info: BasicInformation,
     projected_savings: float,
     savings_needed: float,
     extra_savings: float,
@@ -87,6 +91,7 @@ def update_projection(
     
     INPUTS:
         projection: Projection object - Existing projection to update
+        basic_info: BasicInformation object - The retirement plan
         projected_savings: float - Projected savings at retirement
         savings_needed: float - Savings needed at retirement
         extra_savings: float - Extra savings (positive) or shortfall (negative)
@@ -98,17 +103,19 @@ def update_projection(
     OUTPUTS:
         Projection object - Updated projection record
     """
-    projection.retirement_age = projection.retirement_plan.work_optional_age
+    retirement_age = basic_info.work_optional_age if basic_info.work_optional_age else basic_info.current_age + 30
+    projection.retirement_age = retirement_age
     projection.projected_savings = Decimal(str(round(projected_savings, 2)))
     projection.savings_needed = Decimal(str(round(savings_needed, 2)))
     projection.extra_savings = Decimal(str(round(extra_savings, 2)))
     projection.is_on_track = is_on_track
-    projection.success_probability = Decimal(str(round(monte_carlo_results['success_probability'], 1)))
-    projection.percentile_10 = Decimal(str(round(monte_carlo_results['percentile_10'], 2)))
-    projection.percentile_25 = Decimal(str(round(monte_carlo_results['percentile_25'], 2)))
-    projection.percentile_50 = Decimal(str(round(monte_carlo_results['percentile_50'], 2)))
-    projection.percentile_75 = Decimal(str(round(monte_carlo_results['percentile_75'], 2)))
-    projection.percentile_90 = Decimal(str(round(monte_carlo_results['percentile_90'], 2)))
+    projection.success_probability = Decimal(str(round(monte_carlo_results.get('success_probability', 0.0), 1))) if monte_carlo_results.get('success_probability') else None
+    projection.percentile_10 = Decimal(str(round(monte_carlo_results.get('percentile_10', 0.0), 2))) if monte_carlo_results.get('percentile_10') is not None else None
+    projection.percentile_25 = Decimal(str(round(monte_carlo_results.get('percentile_25', 0.0), 2))) if monte_carlo_results.get('percentile_25') is not None else None
+    projection.percentile_50 = Decimal(str(round(monte_carlo_results.get('percentile_50', 0.0), 2))) if monte_carlo_results.get('percentile_50') is not None else None
+    projection.percentile_75 = Decimal(str(round(monte_carlo_results.get('percentile_75', 0.0), 2))) if monte_carlo_results.get('percentile_75') is not None else None
+    projection.percentile_90 = Decimal(str(round(monte_carlo_results.get('percentile_90', 0.0), 2))) if monte_carlo_results.get('percentile_90') is not None else None
+    projection.run_out_age = run_out_age
     projection.yearly_breakdown = yearly_breakdown
     projection.monte_carlo_data = monte_carlo_results
     projection.save()
@@ -117,7 +124,7 @@ def update_projection(
 
 
 def create_or_update_projection(
-    plan: RetirementPlan,
+    basic_info: BasicInformation,
     projected_savings: float,
     savings_needed: float,
     extra_savings: float,
@@ -131,7 +138,7 @@ def create_or_update_projection(
     Create a new projection or update existing one.
     
     INPUTS:
-        plan: RetirementPlan object - The retirement plan
+        basic_info: BasicInformation object - The retirement plan
         projected_savings: float - Projected savings at retirement
         savings_needed: float - Savings needed at retirement
         extra_savings: float - Extra savings (positive) or shortfall (negative)
@@ -151,15 +158,16 @@ def create_or_update_projection(
     """
     # Delete old projections if forcing recalculate
     if force_recalculate:
-        plan.projections.all().delete()
+        basic_info.projections.all().delete()
         existing_projection = None
     else:
-        existing_projection = plan.projections.first()
+        existing_projection = basic_info.projections.first()
     
     # Update existing or create new
     if existing_projection:
         return update_projection(
             projection=existing_projection,
+            basic_info=basic_info,
             projected_savings=projected_savings,
             savings_needed=savings_needed,
             extra_savings=extra_savings,
@@ -170,7 +178,7 @@ def create_or_update_projection(
         )
     else:
         return create_projection(
-            plan=plan,
+            basic_info=basic_info,
             projected_savings=projected_savings,
             savings_needed=savings_needed,
             extra_savings=extra_savings,

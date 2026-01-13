@@ -13,17 +13,13 @@ OUTPUTS: Year-by-year withdrawal breakdown, run-out age if applicable
 """
 
 from typing import List, Dict, Any
-from ..models import RetirementPlan, LifeEvent
-from .utils import calculate_life_event_impact
-from .preprocessing import (
-    apply_withdrawal_strategy,
-    calculate_inflated_income_need,
-)
+from api.models import BasicInformation, LifeEvent
+from .utils import calculate_life_event_impact, apply_withdrawal_strategy, calculate_inflated_income_need
 
 
 def simulate_withdrawal_year(
     account_balances: Dict[str, float],
-    plan: RetirementPlan,
+    basic_info: BasicInformation,
     age: int,
     year: int,
     years_to_retirement: int,
@@ -99,8 +95,9 @@ def simulate_withdrawal_year(
     return_after_retirement = preprocessed_data['return_after_retirement']
     
     # Step 1: Calculate Inflated Income Need
+    yearly_income_goal = float(basic_info.yearly_income_for_ideal_lifestyle) / 100 if basic_info.yearly_income_for_ideal_lifestyle else 0.0
     inflated_income_need = calculate_inflated_income_need(
-        yearly_income_goal=float(plan.yearly_income_goal),
+        yearly_income_goal=yearly_income_goal,
         inflation_rate=inflation_rate,
         years_to_retirement=years_to_retirement,
         years_since_retirement=years_since_retirement
@@ -108,9 +105,14 @@ def simulate_withdrawal_year(
     
     # Step 2: Calculate Guaranteed Income for This Year
     # Government benefits start at specified ages
-    cpp_income = cpp_adjusted if age >= plan.cpp_start_age else 0.0
-    oas_income = oas_adjusted if age >= plan.oas_start_age else 0.0
-    pension_income = pension_amount if plan.has_pension and age >= plan.pension_start_age else 0.0
+    cpp_start_age = basic_info.cpp_start_age if basic_info.cpp_start_age else 65
+    oas_start_age = basic_info.oas_start_age if basic_info.oas_start_age else 65
+    pension_start_age = basic_info.has_work_pension.pension_start_age if basic_info.has_work_pension and basic_info.has_work_pension.pension_start_age else 65
+    has_pension = basic_info.has_work_pension and basic_info.has_work_pension.has_pension if basic_info.has_work_pension else False
+    
+    cpp_income = cpp_adjusted if age >= cpp_start_age else 0.0
+    oas_income = oas_adjusted if age >= oas_start_age else 0.0
+    pension_income = pension_amount if has_pension and age >= pension_start_age else 0.0
     total_guaranteed_income = cpp_income + oas_income + pension_income
     
     # Step 3: Calculate Withdrawal Needed from Portfolio
@@ -125,8 +127,9 @@ def simulate_withdrawal_year(
     # Step 5: Apply Withdrawal Strategy and Life Events
     if starting_balance > 0:
         # Apply withdrawal strategy (modifies account_balances in place)
+        strategy = basic_info.withdrawal_strategy.lower() if basic_info.withdrawal_strategy else 'optimized'
         apply_withdrawal_strategy(
-            strategy=plan.withdrawal_strategy,
+            strategy=strategy,
             withdrawal_needed=withdrawal_needed,
             account_balances=account_balances
         )
@@ -187,7 +190,7 @@ def simulate_withdrawal_year(
 
 
 def run_withdrawal_phase(
-    plan: RetirementPlan,
+    basic_info: BasicInformation,
     account_balances_at_retirement: Dict[str, float],
     years_to_retirement: int,
     years_in_retirement: int,
@@ -197,7 +200,7 @@ def run_withdrawal_phase(
     Run the complete withdrawal phase from retirement age to life expectancy.
     
     INPUTS:
-        plan: RetirementPlan object containing user inputs
+        basic_info: BasicInformation object containing user inputs
         account_balances_at_retirement: Dict[str, float] - Starting balances at retirement
             Format: {'TFSA': 200000.0, 'RRSP': 300000.0, 'NON_REG': 100000.0}
         years_to_retirement: int - Years from start to retirement
@@ -216,13 +219,13 @@ def run_withdrawal_phase(
     """
     breakdown = []
     current_year = 2025  # Base year
-    retirement_age = plan.work_optional_age
+    retirement_age = basic_info.work_optional_age if basic_info.work_optional_age else basic_info.current_age + 30
     
     # Start with balances at retirement
     account_balances = account_balances_at_retirement.copy()
     
     # Get life events
-    life_events = list(plan.life_events.all())
+    life_events = list(basic_info.life_events.all())
     
     # Simulate each year during retirement
     for year_idx in range(years_in_retirement):
@@ -233,7 +236,7 @@ def run_withdrawal_phase(
         # Simulate this year
         year_data = simulate_withdrawal_year(
             account_balances=account_balances,
-            plan=plan,
+            basic_info=basic_info,
             age=age,
             year=year,
             years_to_retirement=years_to_retirement,
@@ -253,21 +256,19 @@ def run_withdrawal_phase(
 
 
 def find_run_out_age(
-    withdrawal_breakdown: List[Dict[str, Any]],
-    retirement_age: int
+    withdrawal_breakdown: List[Dict[str, Any]]
 ) -> int:
     """
     Find the age at which money runs out (if applicable).
     
     INPUTS:
         withdrawal_breakdown: List[Dict] - Year-by-year withdrawal data
-        retirement_age: int - Age at retirement
     
     OUTPUTS:
         int or None - Age when money runs out, or None if money lasts
     """
     for year_data in withdrawal_breakdown:
-        if year_data['ending_balance'] <= 0 and year_data['age'] >= retirement_age:
-            return year_data['age']
+        if year_data.get('ending_balance', 0) <= 0:
+            return year_data.get('age')
     return None
 

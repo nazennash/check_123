@@ -3,6 +3,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from .serializers import BasicInformationSerializer
 from .models import BasicInformation
+from calculator.services.orchestrator import run_retirement_calculation
 
 
 @api_view(['POST'])
@@ -61,4 +62,56 @@ def delete_basic_information(request, client_id):
         return Response(
             {'error': f'Basic information with client_id {client_id} not found.'},
             status=status.HTTP_404_NOT_FOUND
+        )
+
+
+@api_view(['POST'])
+def calculate_retirement(request, client_id):
+    """
+    Calculate retirement projection for a given client_id.
+    
+    POST /api/calculate-retirement/<client_id>/
+    """
+    try:
+        basic_info = BasicInformation.objects.get(client_id=client_id)
+        
+        # Run the retirement calculation
+        results = run_retirement_calculation(basic_info, force_recalculate=True)
+        
+        # Prepare response data
+        response_data = {
+            'client_id': client_id,
+            'projected_savings': results['projected_savings'],
+            'savings_needed': results['savings_needed'],
+            'extra_savings': results['extra_savings'],
+            'is_on_track': results['is_on_track'],
+            'run_out_age': results['run_out_age'],
+            'success_probability': results['success_probability'],
+            'additional_monthly_needed': results['additional_monthly_needed'],
+            'retirement_age': results['projection'].retirement_age,
+            'account_balances_at_retirement': results['account_balances_at_retirement'],
+            'gap_analysis': results['gap_analysis'],
+            'monte_carlo': {
+                'success_probability': results['monte_carlo_results'].get('success_probability', 0.0),
+                'percentile_10': results['monte_carlo_results'].get('percentile_10', 0.0),
+                'percentile_25': results['monte_carlo_results'].get('percentile_25', 0.0),
+                'percentile_50': results['monte_carlo_results'].get('percentile_50', 0.0),
+                'percentile_75': results['monte_carlo_results'].get('percentile_75', 0.0),
+                'percentile_90': results['monte_carlo_results'].get('percentile_90', 0.0),
+            },
+            'projection_id': results['projection'].id,
+            'yearly_breakdown_count': len(results['yearly_breakdown'])
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+        
+    except BasicInformation.DoesNotExist:
+        return Response(
+            {'error': f'Basic information with client_id {client_id} not found.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {'error': f'Error calculating retirement: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

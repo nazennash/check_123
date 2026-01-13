@@ -1,0 +1,58 @@
+{
+  "basic_information": {
+    "client_id": 99999,
+    "current_age": 35,
+    "work_optional_age": 55,
+    "yearly_income_for_ideal_lifestyle": 80000.00,
+    "inflation_rate": 2.5,
+    "return_after_work_optional": 4.0,
+    "plan_until_age": 90,
+    "cpp_start_age": 65,
+    "cpp_amount_at_age": 12000.00,
+    "oas_start_age": 65,
+    "oas_amount_at_OAS_age": 7000.00,
+    "has_work_pension": {
+      "has_pension": false,
+      "monthly_pension_amount": null,
+      "pension_start_age": null
+    },
+    "withdrawal_strategy": "optimized"
+  },
+  "investment_accounts": [
+    {
+      "account_type": "RRSP",
+      "balance": 50000.00,
+      "monthly_contribution": 200.00,
+      "investment_profile": "balanced"
+    },
+    {
+      "account_type": "TFSA",
+      "balance": 15000.00,
+      "monthly_contribution": 100.00,
+      "investment_profile": "balanced"
+    }
+  ],
+  "life_events": [
+    {
+      "name": "Home Purchase",
+      "event_type": "expenses",
+      "frequency": "one_time",
+      "amount": 40000.00,
+      "start_age": 40,
+      "end_age": 40,
+      "account": "RRSP",
+      "notes": "Down payment for home"
+    },
+    {
+      "name": "Child Education",
+      "event_type": "expenses",
+      "frequency": "annually",
+      "amount": 15000.00,
+      "start_age": 45,
+      "end_age": 50,
+      "account": "NON_REG",
+      "notes": "Annual education expenses"
+    }
+  ]
+}
+

@@ -13,7 +13,7 @@ OUTPUTS: Year-by-year accumulation breakdown, projected savings at retirement
 """
 
 from typing import List, Dict, Any
-from ..models import RetirementPlan, InvestmentAccount, LifeEvent
+from api.models import BasicInformation, InvestmentAccount, LifeEvent
 from .utils import calculate_life_event_impact
 from .preprocessing import prepare_account_data
 
@@ -147,7 +147,7 @@ def simulate_accumulation_year(
 
 
 def run_accumulation_phase(
-    plan: RetirementPlan,
+    basic_info: BasicInformation,
     accounts: List[InvestmentAccount],
     years_to_retirement: int,
     preprocessed_data: Dict[str, Any]
@@ -156,7 +156,7 @@ def run_accumulation_phase(
     Run the complete accumulation phase from current age to retirement age.
     
     INPUTS:
-        plan: RetirementPlan object containing user inputs
+        basic_info: BasicInformation object containing user inputs
         accounts: List[InvestmentAccount objects
         years_to_retirement: int - Number of years until retirement
         preprocessed_data: Dict from preprocessing layer containing:
@@ -185,11 +185,11 @@ def run_accumulation_phase(
     inflation_rate = preprocessed_data['inflation_rate']
     
     # Get life events
-    life_events = list(plan.life_events.all())
+    life_events = list(basic_info.life_events.all())
     
     # Simulate each year until retirement
     for year_idx in range(years_to_retirement):
-        age = plan.current_age + year_idx
+        age = basic_info.current_age + year_idx
         year = current_year + year_idx
         
         # Simulate this year

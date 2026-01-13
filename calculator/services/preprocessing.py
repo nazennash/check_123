@@ -26,7 +26,7 @@ LAYER FUNCTIONS:
 from typing import List, Dict, Any, Tuple
 from decimal import Decimal
 from datetime import datetime
-from ..models import RetirementPlan, InvestmentAccount, LifeEvent
+from api.models import BasicInformation, InvestmentAccount, LifeEvent
 
 
 # ============================================================================
@@ -43,9 +43,9 @@ PROFILE_RETURNS = {
 # Withdrawal Strategy Configuration
 WITHDRAWAL_STRATEGIES = {
     'optimized': ['NON_REG', 'RRSP', 'TFSA'],  # Preserves TFSA
-    'rrsp_first': ['RRSP', 'NON_REG', 'TFSA'],
-    'nonreg_first': ['NON_REG', 'TFSA', 'RRSP'],
-    'tfsa_first': ['TFSA', 'NON_REG', 'RRSP'],
+    'rrsp': ['RRSP', 'NON_REG', 'TFSA'],
+    'non_registered': ['NON_REG', 'TFSA', 'RRSP'],
+    'tfsa': ['TFSA', 'NON_REG', 'RRSP'],
 }
 
 # Default Assumptions
@@ -58,7 +58,7 @@ DEFAULT_PENSION_INDEXING_RATE = 0.015  # 1.5%
 # 1. CPP/OAS ADJUSTMENT PROCESSING
 # ============================================================================
 
-def calculate_cpp_adjustment(plan: RetirementPlan) -> Dict[str, Any]:
+def calculate_cpp_adjustment(basic_info: BasicInformation) -> Dict[str, Any]:
     """
     Calculate CPP amount adjusted for early/late start age.
     
@@ -71,8 +71,8 @@ def calculate_cpp_adjustment(plan: RetirementPlan) -> Dict[str, Any]:
     
     RETURNS: Dictionary with CPP adjustment details
     """
-    cpp_base = float(plan.cpp_amount)
-    start_age = plan.cpp_start_age
+    cpp_base = float(basic_info.cpp_amount_at_age) / 100 if basic_info.cpp_amount_at_age else 0.0
+    start_age = basic_info.cpp_start_age if basic_info.cpp_start_age else 65
     adjustment_factor = 1.0
     adjustment_type = "standard"
     
@@ -97,11 +97,11 @@ def calculate_cpp_adjustment(plan: RetirementPlan) -> Dict[str, Any]:
         'adjusted_amount': adjusted_amount,
         'adjustment_factor': adjustment_factor,
         'adjustment_type': adjustment_type,
-        'start_year': start_age - plan.current_age if start_age > plan.current_age else 0
+        'start_year': start_age - basic_info.current_age if start_age > basic_info.current_age else 0
     }
 
 
-def calculate_oas_adjustment(plan: RetirementPlan) -> Dict[str, Any]:
+def calculate_oas_adjustment(basic_info: BasicInformation) -> Dict[str, Any]:
     """
     Calculate OAS amount adjusted for late start age.
     
@@ -113,8 +113,8 @@ def calculate_oas_adjustment(plan: RetirementPlan) -> Dict[str, Any]:
     
     RETURNS: Dictionary with OAS adjustment details
     """
-    oas_base = float(plan.oas_amount)
-    start_age = max(plan.oas_start_age, 65)  # Cannot start before 65
+    oas_base = float(basic_info.oas_amount_at_OAS_age) / 100 if basic_info.oas_amount_at_OAS_age else 0.0
+    start_age = max(basic_info.oas_start_age if basic_info.oas_start_age else 65, 65)  # Cannot start before 65
     adjustment_factor = 1.0
     adjustment_type = "standard"
     
@@ -133,7 +133,7 @@ def calculate_oas_adjustment(plan: RetirementPlan) -> Dict[str, Any]:
         'adjusted_amount': adjusted_amount,
         'adjustment_factor': adjustment_factor,
         'adjustment_type': adjustment_type,
-        'start_year': start_age - plan.current_age if start_age > plan.current_age else 0
+        'start_year': start_age - basic_info.current_age if start_age > basic_info.current_age else 0
     }
 
 
@@ -141,18 +141,18 @@ def calculate_oas_adjustment(plan: RetirementPlan) -> Dict[str, Any]:
 # 2. PENSION CALCULATIONS WITH INDEXING
 # ============================================================================
 
-def calculate_pension_with_indexing(plan: RetirementPlan) -> Dict[str, Any]:
+def calculate_pension_with_indexing(basic_info: BasicInformation) -> Dict[str, Any]:
     """
     Calculate pension amounts with indexing rules applied.
     
     BUSINESS RULES:
         - Indexing starts at pension start age
-        - Annual indexing based on plan.pension_indexing_rate
+        - Annual indexing based on DEFAULT_PENSION_INDEXING_RATE (1.5%)
         - Returns indexed amounts for each retirement year
     
     RETURNS: Dictionary with pension calculation details
     """
-    if not plan.has_pension:
+    if not basic_info.has_work_pension or not basic_info.has_work_pension.has_pension:
         return {
             'has_pension': False,
             'base_amount': 0.0,
@@ -161,12 +161,13 @@ def calculate_pension_with_indexing(plan: RetirementPlan) -> Dict[str, Any]:
             'indexed_amounts': {}
         }
     
-    base_amount = float(plan.pension_amount)
-    indexing_rate = float(plan.pension_indexing_rate) / 100 if hasattr(plan, 'pension_indexing_rate') else DEFAULT_PENSION_INDEXING_RATE
-    start_age = plan.pension_start_age
+    pension = basic_info.has_work_pension
+    base_amount = float(pension.monthly_pension_amount) / 100 * 12 if pension.monthly_pension_amount else 0.0
+    indexing_rate = DEFAULT_PENSION_INDEXING_RATE
+    start_age = pension.pension_start_age if pension.pension_start_age else 65
     
     # Calculate start year relative to current age
-    start_year = max(0, start_age - plan.current_age)
+    start_year = max(0, start_age - basic_info.current_age)
     
     # Pre-calculate indexed amounts for first 30 years of retirement
     indexed_amounts = {}
@@ -190,13 +191,13 @@ def calculate_pension_with_indexing(plan: RetirementPlan) -> Dict[str, Any]:
 # 3. INFLATION ASSUMPTION PROCESSING
 # ============================================================================
 
-def process_inflation_assumptions(plan: RetirementPlan) -> Dict[str, Any]:
+def process_inflation_assumptions(basic_info: BasicInformation) -> Dict[str, Any]:
     """
     Process and setup global inflation assumptions.
     
     RETURNS: Dictionary with inflation configuration
     """
-    inflation_rate = float(plan.inflation_rate) / 100 if hasattr(plan, 'inflation_rate') else DEFAULT_INFLATION_RATE
+    inflation_rate = float(basic_info.inflation_rate) / 100 if basic_info.inflation_rate else DEFAULT_INFLATION_RATE
     
     return {
         'annual_rate': inflation_rate,
@@ -253,7 +254,7 @@ def get_account_return_profile(account: InvestmentAccount) -> Dict[str, Any]:
     """
     Get the expected return profile for a specific investment account.
     """
-    profile = account.investment_profile
+    profile = account.investment_profile.lower() if account.investment_profile else 'balanced'
     expected_return = PROFILE_RETURNS.get(profile, 0.05)  # Default to balanced
     
     return {
@@ -277,19 +278,20 @@ def calculate_weighted_portfolio_return(accounts: List[InvestmentAccount]) -> Di
     total_balance = sum(float(acc.balance) for acc in accounts)
     
     if total_balance > 0:
-        # Weight by balances
+        # Weight by balances (convert from cents to dollars)
         weighted_return = sum(
-            float(acc.balance) * get_account_return_profile(acc)['expected_return']
+            (float(acc.balance) / 100) * get_account_return_profile(acc)['expected_return']
             for acc in accounts
         ) / total_balance
         
-        # Calculate contribution weights for reference
-        total_contribution = sum(float(acc.monthly_contribution) for acc in accounts)
+        # Calculate contribution weights for reference (convert from cents to dollars)
+        total_contribution = sum((float(acc.monthly_contribution) / 100) for acc in accounts if acc.monthly_contribution)
         contribution_weights = {}
         for acc in accounts:
-            if total_contribution > 0:
-                weight = float(acc.monthly_contribution) / total_contribution
-                contribution_weights[acc.account_type] = weight
+            if total_contribution > 0 and acc.monthly_contribution:
+                weight = (float(acc.monthly_contribution) / 100) / total_contribution
+                acc_type = acc.account_type.upper() if acc.account_type else 'NON_REG'
+                contribution_weights[acc_type] = weight
         
         return {
             'weighted_return': weighted_return,
@@ -299,20 +301,20 @@ def calculate_weighted_portfolio_return(accounts: List[InvestmentAccount]) -> Di
             'account_count': len(accounts)
         }
     else:
-        # Weight by contributions
-        total_contribution = sum(float(acc.monthly_contribution) for acc in accounts)
+        # Weight by contributions (convert from cents to dollars)
+        total_contribution = sum((float(acc.monthly_contribution) / 100) for acc in accounts if acc.monthly_contribution)
         
         if total_contribution > 0:
             weighted_return = sum(
-                float(acc.monthly_contribution) * get_account_return_profile(acc)['expected_return']
-                for acc in accounts
+                (float(acc.monthly_contribution) / 100) * get_account_return_profile(acc)['expected_return']
+                for acc in accounts if acc.monthly_contribution
             ) / total_contribution
             
             return {
                 'weighted_return': weighted_return,
                 'total_balance': total_balance,
                 'weighting_method': 'contribution',
-                'contribution_weights': {acc.account_type: float(acc.monthly_contribution)/total_contribution for acc in accounts},
+                'contribution_weights': {(acc.account_type.upper() if acc.account_type else 'NON_REG'): (float(acc.monthly_contribution) / 100)/total_contribution for acc in accounts if acc.monthly_contribution},
                 'account_count': len(accounts)
             }
         else:
@@ -326,11 +328,11 @@ def calculate_weighted_portfolio_return(accounts: List[InvestmentAccount]) -> Di
             }
 
 
-def process_return_after_retirement(plan: RetirementPlan) -> Dict[str, Any]:
+def process_return_after_retirement(basic_info: BasicInformation) -> Dict[str, Any]:
     """
     Process return assumptions for the retirement phase.
     """
-    return_rate = float(plan.return_after_retirement) / 100 if hasattr(plan, 'return_after_retirement') else DEFAULT_RETURN_AFTER_RETIREMENT
+    return_rate = float(basic_info.return_after_work_optional) / 100 if basic_info.return_after_work_optional else DEFAULT_RETURN_AFTER_RETIREMENT
     
     return {
         'annual_return': return_rate,
@@ -344,25 +346,25 @@ def process_return_after_retirement(plan: RetirementPlan) -> Dict[str, Any]:
 # 5. WITHDRAWAL STRATEGY CONFIGURATION
 # ============================================================================
 
-def configure_withdrawal_strategy(plan: RetirementPlan) -> Dict[str, Any]:
+def configure_withdrawal_strategy(basic_info: BasicInformation) -> Dict[str, Any]:
     """
     Load and configure withdrawal strategy settings.
     
     RETURNS: Complete withdrawal strategy configuration
     """
-    strategy = getattr(plan, 'withdrawal_strategy', 'optimized')
+    strategy = basic_info.withdrawal_strategy.lower() if basic_info.withdrawal_strategy else 'optimized'
     withdrawal_order = WITHDRAWAL_STRATEGIES.get(strategy, WITHDRAWAL_STRATEGIES['optimized'])
     
-    # Get withdrawal rate (as decimal)
-    withdrawal_rate = float(getattr(plan, 'withdrawal_rate', 4.0)) / 100
+    # Get withdrawal rate (as decimal) - default 4%
+    withdrawal_rate = 0.04
     
     # Get withdrawal limits if specified
-    floor_amount = float(getattr(plan, 'withdrawal_floor', 0.0))
-    ceiling_amount = float(getattr(plan, 'withdrawal_ceiling', 0.0)) or None
+    floor_amount = 0.0
+    ceiling_amount = None
     
     # Additional strategy parameters
-    dynamic_adjustment = getattr(plan, 'dynamic_withdrawal_adjustment', False)
-    guardrail_threshold = float(getattr(plan, 'guardrail_threshold', 0.2))  # 20% threshold
+    dynamic_adjustment = False
+    guardrail_threshold = 0.2  # 20% threshold
     
     return {
         'strategy_name': strategy,
@@ -430,19 +432,19 @@ def get_strategy_description(strategy: str) -> str:
     """
     descriptions = {
         'optimized': "Preserves TFSA by withdrawing from Non-Registered accounts first, then RRSP, then TFSA. Optimizes for tax efficiency and estate planning.",
-        'rrsp_first': "Withdraws from RRSP first to reduce mandatory withdrawals later. May increase tax burden in early retirement.",
-        'nonreg_first': "Withdraws from Non-Registered accounts first to defer RRSP taxation. Good for those expecting lower future tax rates.",
-        'tfsa_first': "Withdraws from TFSA first to preserve taxable accounts. Useful for those needing maximum flexibility."
+        'rrsp': "Withdraws from RRSP first to reduce mandatory withdrawals later. May increase tax burden in early retirement.",
+        'non_registered': "Withdraws from Non-Registered accounts first to defer RRSP taxation. Good for those expecting lower future tax rates.",
+        'tfsa': "Withdraws from TFSA first to preserve taxable accounts. Useful for those needing maximum flexibility."
     }
     
-    return descriptions.get(strategy, descriptions['optimized'])
+    return descriptions.get(strategy.lower(), descriptions['optimized'])
 
 
 # ============================================================================
 # 6. EVENT PREPROCESSING
 # ============================================================================
 
-def preprocess_life_events(plan: RetirementPlan) -> List[Dict[str, Any]]:
+def preprocess_life_events(basic_info: BasicInformation) -> List[Dict[str, Any]]:
     """
     Preprocess life events for the calculation engine.
     
@@ -459,54 +461,41 @@ def preprocess_life_events(plan: RetirementPlan) -> List[Dict[str, Any]]:
     """
     processed_events = []
     
-    # Get events from plan (assuming related model)
-    # In practice: events = plan.life_events.all()
-    # For now, we'll use a placeholder or attribute
-    
-    # If plan has events attribute
-    if hasattr(plan, 'life_events'):
-        events = plan.life_events  # This should be a queryset or list
-    else:
-        # Fallback: create from plan attributes if they exist
-        events = []
+    # Get events from basic_info
+    events = basic_info.life_events.all()
     
     for event in events:
         # Calculate year of effect relative to current age
-        if hasattr(event, 'event_year'):
-            year_of_effect = event.event_year - plan.current_age
-        elif hasattr(event, 'event_age'):
-            year_of_effect = event.event_age - plan.current_age
-        else:
-            year_of_effect = 0
+        year_of_effect = event.start_age - basic_info.current_age
         
         # Determine event type
-        event_type = getattr(event, 'event_type', 'expense')
-        if hasattr(event, 'amount'):
-            amount = float(event.amount)
-            if amount < 0:
-                event_type = 'expense'
-            else:
-                event_type = 'income'
+        event_type = 'expenses' if event.event_type == 'expenses' else 'contribution'
         
         # Process event data
+        amount_cents = float(event.amount) if event.amount else 0.0
+        amount_dollars = amount_cents / 100
+        
         processed_event = {
-            'id': getattr(event, 'id', None),
+            'id': event.id,
             'year_of_effect': max(0, year_of_effect),
-            'amount': abs(float(getattr(event, 'amount', 0.0))),
+            'amount': amount_dollars,
             'type': event_type,
-            'account_affected': getattr(event, 'account_type', None),
-            'description': getattr(event, 'description', 'Life Event'),
-            'is_recurring': getattr(event, 'is_recurring', False),
-            'duration_years': getattr(event, 'duration_years', 1),
-            'inflation_adjusted': getattr(event, 'inflation_adjusted', True),
-            'tax_implications': getattr(event, 'has_tax_implications', False),
-            'category': getattr(event, 'category', 'other'),
-            'priority': getattr(event, 'priority', 'medium')
+            'account_affected': event.account.upper() if event.account else 'NON_REG',
+            'description': event.name if event.name else 'Life Event',
+            'is_recurring': event.frequency != 'one_time',
+            'duration_years': max(1, event.end_age - event.start_age) if event.end_age > event.start_age else 1,
+            'inflation_adjusted': True,
+            'tax_implications': False,
+            'category': 'other',
+            'priority': 'medium',
+            'frequency': event.frequency,
+            'start_age': event.start_age,
+            'end_age': event.end_age
         }
         
         # Adjust for inflation if needed
         if processed_event['inflation_adjusted'] and processed_event['year_of_effect'] > 0:
-            inflation_config = process_inflation_assumptions(plan)
+            inflation_config = process_inflation_assumptions(basic_info)
             processed_event['future_value'] = apply_inflation_to_amount(
                 processed_event['amount'],
                 inflation_config['annual_rate'],
@@ -562,11 +551,15 @@ def prepare_account_data(accounts: List[InvestmentAccount]) -> Dict[str, Any]:
     
     # Populate from accounts
     for acc in accounts:
-        acc_type = acc.account_type
-        if acc_type in account_balances:
-            # Basic account data
-            account_balances[acc_type] = float(acc.balance)
-            account_contributions[acc_type] = float(acc.monthly_contribution) * 12  # Annual
+        acc_type = acc.account_type.upper() if acc.account_type else 'NON_REG'
+        if acc_type in ['TFSA', 'RRSP', 'NON_REG', 'NON_REGISTERED']:
+            if acc_type == 'NON_REGISTERED':
+                acc_type = 'NON_REG'
+            
+            # Basic account data (convert from cents to dollars)
+            account_balances[acc_type] = float(acc.balance) / 100
+            monthly_contrib = float(acc.monthly_contribution) / 100 if acc.monthly_contribution else 0.0
+            account_contributions[acc_type] = monthly_contrib * 12  # Annual
             
             # Return profile
             profile_data = get_account_return_profile(acc)
@@ -575,16 +568,16 @@ def prepare_account_data(accounts: List[InvestmentAccount]) -> Dict[str, Any]:
             
             # Individual account details
             individual_accounts.append({
-                'id': getattr(acc, 'id', None),
-                'name': getattr(acc, 'name', f"{acc_type} Account"),
+                'id': acc.id,
+                'name': f"{acc_type} Account",
                 'type': acc_type,
-                'balance': float(acc.balance),
-                'annual_contribution': float(acc.monthly_contribution) * 12,
-                'investment_profile': acc.investment_profile,
+                'balance': account_balances[acc_type],
+                'annual_contribution': account_contributions[acc_type],
+                'investment_profile': acc.investment_profile if acc.investment_profile else 'balanced',
                 'expected_return': profile_data['expected_return'],
-                'institution': getattr(acc, 'institution', 'Unknown'),
-                'account_number': getattr(acc, 'account_number', ''),
-                'is_active': getattr(acc, 'is_active', True)
+                'institution': 'Unknown',
+                'account_number': '',
+                'is_active': True
             })
     
     # Calculate totals
@@ -615,7 +608,7 @@ def prepare_account_data(accounts: List[InvestmentAccount]) -> Dict[str, Any]:
 # ============================================================================
 
 def preprocess_retirement_plan(
-    plan: RetirementPlan,
+    basic_info: BasicInformation,
     accounts: List[InvestmentAccount],
     events: List[Any] = None
 ) -> Dict[str, Any]:
@@ -629,29 +622,31 @@ def preprocess_retirement_plan(
     """
     # Calculate time periods
     current_year = datetime.now().year
-    years_to_retirement = max(0, plan.work_optional_age - plan.current_age)
-    years_in_retirement = max(0, plan.life_expectancy - plan.work_optional_age)
+    work_optional_age = basic_info.work_optional_age if basic_info.work_optional_age else basic_info.current_age + 30
+    plan_until_age = basic_info.plan_until_age if basic_info.plan_until_age else 90
+    years_to_retirement = max(0, work_optional_age - basic_info.current_age)
+    years_in_retirement = max(0, plan_until_age - work_optional_age)
     
     # 1. Process government benefits
-    cpp_data = calculate_cpp_adjustment(plan)
-    oas_data = calculate_oas_adjustment(plan)
+    cpp_data = calculate_cpp_adjustment(basic_info)
+    oas_data = calculate_oas_adjustment(basic_info)
     
     # 2. Process pension with indexing
-    pension_data = calculate_pension_with_indexing(plan)
+    pension_data = calculate_pension_with_indexing(basic_info)
     
     # 3. Process inflation assumptions
-    inflation_data = process_inflation_assumptions(plan)
+    inflation_data = process_inflation_assumptions(basic_info)
     
     # 4. Process return assumptions
     weighted_return_data = calculate_weighted_portfolio_return(accounts)
-    post_retirement_return_data = process_return_after_retirement(plan)
+    post_retirement_return_data = process_return_after_retirement(basic_info)
     
     # 5. Configure withdrawal strategy
-    withdrawal_config = configure_withdrawal_strategy(plan)
+    withdrawal_config = configure_withdrawal_strategy(basic_info)
     
     # 6. Preprocess life events
     if events is None:
-        events_data = preprocess_life_events(plan)
+        events_data = preprocess_life_events(basic_info)
     else:
         # Use provided events
         events_data = events
@@ -662,7 +657,7 @@ def preprocess_retirement_plan(
     account_data = prepare_account_data(accounts)
     
     # 8. Calculate base income needs (inflation adjusted)
-    yearly_income_goal = float(plan.yearly_income_goal)
+    yearly_income_goal = float(basic_info.yearly_income_for_ideal_lifestyle) / 100 if basic_info.yearly_income_for_ideal_lifestyle else 0.0
     
     # Calculate income needs for each retirement year
     retirement_income_needs = {}
@@ -677,9 +672,9 @@ def preprocess_retirement_plan(
     # 9. Compile all data
     preprocessed_data = {
         # Time and age data
-        'current_age': plan.current_age,
-        'retirement_age': plan.work_optional_age,
-        'life_expectancy': plan.life_expectancy,
+        'current_age': basic_info.current_age,
+        'retirement_age': work_optional_age,
+        'life_expectancy': plan_until_age,
         'years_to_retirement': years_to_retirement,
         'years_in_retirement': years_in_retirement,
         'calculation_horizon': years_to_retirement + years_in_retirement,
@@ -688,16 +683,21 @@ def preprocess_retirement_plan(
         # Government benefits
         'cpp': cpp_data,
         'oas': oas_data,
+        'cpp_adjusted': cpp_data['adjusted_amount'],
+        'oas_adjusted': oas_data['adjusted_amount'],
         
         # Pension data
         'pension': pension_data,
+        'pension_amount': pension_data['base_amount'] if pension_data['has_pension'] else 0.0,
         
         # Inflation data
         'inflation': inflation_data,
+        'inflation_rate': inflation_data['annual_rate'],
         
         # Return assumptions
         'accumulation_returns': weighted_return_data,
         'retirement_returns': post_retirement_return_data,
+        'return_after_retirement': post_retirement_return_data['annual_return'],
         
         # Withdrawal strategy
         'withdrawal_strategy': withdrawal_config,
@@ -708,23 +708,25 @@ def preprocess_retirement_plan(
         
         # Account data
         'accounts': account_data,
+        'account_data': account_data,
         
         # Income needs
         'yearly_income_goal': yearly_income_goal,
         'retirement_income_needs': retirement_income_needs,
         
         # Additional plan data
-        'has_spouse': getattr(plan, 'has_spouse', False),
-        'spouse_age': getattr(plan, 'spouse_age', None),
-        'retirement_location': getattr(plan, 'retirement_location', 'Canada'),
-        'risk_tolerance': getattr(plan, 'risk_tolerance', 'moderate'),
-        'estate_planning_goal': getattr(plan, 'estate_planning_goal', 'preserve_capital'),
+        'has_spouse': False,
+        'spouse_age': None,
+        'retirement_location': 'Canada',
+        'risk_tolerance': 'moderate',
+        'estate_planning_goal': 'preserve_capital',
         
         # Metadata
         'preprocessing_timestamp': datetime.now().isoformat(),
-        'plan_id': getattr(plan, 'id', None),
-        'plan_name': getattr(plan, 'name', 'Retirement Plan'),
-        'user_id': getattr(plan, 'user_id', None)
+        'plan_id': basic_info.user_id,
+        'plan_name': 'Retirement Plan',
+        'user_id': basic_info.user_id,
+        'client_id': basic_info.client_id
     }
     
     # Add summary statistics
@@ -798,10 +800,10 @@ def validate_preprocessed_data(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
             issues.append(f"Missing required field: {field}")
     
     # Validate numeric ranges
-    if data.get('inflation', {}).get('annual_rate', 0) > 0.10:  > 10%
+    if data.get('inflation', {}).get('annual_rate', 0) > 0.10:  # > 10%
         issues.append("Inflation rate unusually high (>10%)")
     
-    if data.get('accumulation_returns', {}).get('weighted_return', 0) > 0.15:  > 15%
+    if data.get('accumulation_returns', {}).get('weighted_return', 0) > 0.15:  # > 15%
         issues.append("Expected return unusually high (>15%)")
     
     if data.get('years_in_retirement', 0) > 50:
@@ -813,7 +815,7 @@ def validate_preprocessed_data(data: Dict[str, Any]) -> Tuple[bool, List[str]]:
     
     # Check withdrawal rate
     withdrawal_rate = data.get('withdrawal_strategy', {}).get('withdrawal_rate', 0)
-    if withdrawal_rate > 0.10:  > 10%
+    if withdrawal_rate > 0.10:  # > 10%
         issues.append(f"Withdrawal rate unusually high: {withdrawal_rate*100:.1f}%")
     
     return len(issues) == 0, issues

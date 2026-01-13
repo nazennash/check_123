@@ -13,19 +13,16 @@ OUTPUTS: Target savings amount needed at retirement
 """
 
 from typing import Dict, Any
-from ..models import RetirementPlan
-from .preprocessing import (
-    calculate_cpp_at_start,
-    calculate_oas_at_start,
-    apply_inflation_to_amount,
-)
+from api.models import BasicInformation
+from .preprocessing import apply_inflation_to_amount
 
 
 def calculate_annual_shortfall(
     yearly_income_goal: float,
     inflation_rate: float,
     years_to_retirement: int,
-    plan: RetirementPlan
+    basic_info: BasicInformation,
+    preprocessed_data: Dict[str, Any]
 ) -> float:
     """
     Calculate the annual income shortfall at retirement (what needs to come from savings).
@@ -34,10 +31,11 @@ def calculate_annual_shortfall(
         yearly_income_goal: float - Income goal in today's dollars
         inflation_rate: float - Annual inflation rate as decimal (e.g., 0.025 for 2.5%)
         years_to_retirement: int - Years until retirement
-        plan: RetirementPlan object containing:
-            - cpp_start_age, cpp_amount
-            - oas_start_age, oas_amount
-            - has_pension, pension_amount
+        basic_info: BasicInformation object containing:
+            - cpp_start_age, cpp_amount_at_age
+            - oas_start_age, oas_amount_at_OAS_age
+            - has_work_pension (with pension data)
+        preprocessed_data: Dict with cpp_adjusted, oas_adjusted, pension_amount
     
     OUTPUTS:
         float - Annual shortfall amount at retirement (in future dollars)
@@ -56,9 +54,9 @@ def calculate_annual_shortfall(
     )
     
     # Step 2: Calculate Guaranteed Income at Retirement
-    cpp_annual = calculate_cpp_at_start(plan)
-    oas_annual = calculate_oas_at_start(plan)
-    pension_annual = float(plan.pension_amount) if plan.has_pension else 0.0
+    cpp_annual = preprocessed_data.get('cpp_adjusted', 0.0)
+    oas_annual = preprocessed_data.get('oas_adjusted', 0.0)
+    pension_annual = preprocessed_data.get('pension_amount', 0.0)
     
     total_guaranteed_income = cpp_annual + oas_annual + pension_annual
     
@@ -74,7 +72,8 @@ def calculate_savings_needed_pv(
     return_rate: float,
     years_in_retirement: int,
     years_to_retirement: int,
-    plan: RetirementPlan
+    basic_info: BasicInformation,
+    preprocessed_data: Dict[str, Any]
 ) -> float:
     """
     Calculate how much savings needed at retirement to fund the income shortfall.
@@ -120,7 +119,8 @@ def calculate_savings_needed_pv(
         yearly_income_goal=annual_income_need,
         inflation_rate=inflation_rate,
         years_to_retirement=years_to_retirement,
-        plan=plan
+        basic_info=basic_info,
+        preprocessed_data=preprocessed_data
     )
     
     # If no shortfall, no savings needed
@@ -144,14 +144,14 @@ def calculate_savings_needed_pv(
 
 
 def calculate_savings_needed(
-    plan: RetirementPlan,
+    basic_info: BasicInformation,
     preprocessed_data: Dict[str, Any]
 ) -> float:
     """
     Comprehensive function to calculate savings needed using preprocessed data.
     
     INPUTS:
-        plan: RetirementPlan object containing user inputs
+        basic_info: BasicInformation object containing user inputs
         preprocessed_data: Dict from preprocessing layer containing:
             - 'inflation_rate': float
             - 'return_after_retirement': float
@@ -165,13 +165,15 @@ def calculate_savings_needed(
     years_in_retirement = preprocessed_data['years_in_retirement']
     inflation_rate = preprocessed_data['inflation_rate']
     return_after_retirement = preprocessed_data['return_after_retirement']
+    yearly_income_goal = float(basic_info.yearly_income_for_ideal_lifestyle) / 100 if basic_info.yearly_income_for_ideal_lifestyle else 0.0
     
     return calculate_savings_needed_pv(
-        annual_income_need=float(plan.yearly_income_goal),
+        annual_income_need=yearly_income_goal,
         inflation_rate=inflation_rate,
         return_rate=return_after_retirement,
         years_in_retirement=years_in_retirement,
         years_to_retirement=years_to_retirement,
-        plan=plan
+        basic_info=basic_info,
+        preprocessed_data=preprocessed_data
     )
 
