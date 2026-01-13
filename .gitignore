@@ -1,0 +1,36 @@
+# Python
+*.pyc
+__pycache__/
+.env/
+venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+htmlcov/
+
+# Django
+*.log
+*.pot
+local_settings.py
+db.sqlite3
+mediafiles/
+staticfiles/
+
+# IDE-specific files (optional)
+.vscode/
+.idea/
+*.swp
+
+
+__pycache__/
+__init__.py
+__init__.py/
+
+.env
+
+migrations/
