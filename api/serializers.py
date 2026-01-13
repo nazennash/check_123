@@ -45,10 +45,10 @@ class WorkPensionSerializer(serializers.ModelSerializer):
 
     def validate_pension_start_age(self, value):
         if value is not None:
-            if value < 55:
-                raise serializers.ValidationError("Pension start age must be at least 55.")
-            if value > 70:
-                raise serializers.ValidationError("Pension start age cannot exceed 70.")
+            if value < 40:
+                raise serializers.ValidationError("Pension start age must be at least 40.")
+            if value > 75:
+                raise serializers.ValidationError("Pension start age cannot exceed 75.")
         return value
 
 
@@ -199,17 +199,36 @@ class BasicInformationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("current_age field is required.")
         if value < 18:
             raise serializers.ValidationError("current_age must be at least 18.")
-        if value > 150:
-            raise serializers.ValidationError("current_age cannot exceed 150.")
+        if value > 100:
+            raise serializers.ValidationError("current_age cannot exceed 100.")
         return value
 
     def validate_work_optional_age(self, value):
         if value is not None:
-            if value < 50:
-                raise serializers.ValidationError("work_optional_age must be at least 50.")
+            if value < 40:
+                raise serializers.ValidationError("work_optional_age must be at least 40.")
             if value > 75:
                 raise serializers.ValidationError("work_optional_age cannot exceed 75.")
         return value
+
+    def validate(self, data):
+        current_age = data.get('current_age')
+        work_optional_age = data.get('work_optional_age')
+        plan_until_age = data.get('plan_until_age')
+        
+        if current_age is not None and work_optional_age is not None:
+            if work_optional_age < current_age:
+                raise serializers.ValidationError({
+                    'work_optional_age': f'work_optional_age ({work_optional_age}) must be greater than or equal to current_age ({current_age}).'
+                })
+        
+        if work_optional_age is not None and plan_until_age is not None:
+            if plan_until_age < work_optional_age:
+                raise serializers.ValidationError({
+                    'plan_until_age': f'plan_until_age ({plan_until_age}) must be greater than or equal to work_optional_age ({work_optional_age}).'
+                })
+        
+        return data
 
     def validate_yearly_income_for_ideal_lifestyle(self, value):
         if value is not None:
@@ -237,10 +256,8 @@ class BasicInformationSerializer(serializers.ModelSerializer):
 
     def validate_plan_until_age(self, value):
         if value is not None:
-            if value < 80:
-                raise serializers.ValidationError("plan_until_age must be at least 80.")
-            if value > 105:
-                raise serializers.ValidationError("plan_until_age cannot exceed 105.")
+            if value < 0:
+                raise serializers.ValidationError("plan_until_age cannot be negative.")
         return value
 
     def validate_cpp_start_age(self, value):
@@ -273,6 +290,15 @@ class BasicInformationSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("OAS amount cannot be negative.")
             if value > 50000:
                 raise serializers.ValidationError("OAS amount cannot exceed $50,000.00.")
+        return value
+
+    def validate_withdrawal_strategy(self, value):
+        if value:
+            valid_strategies = ['optimized', 'rrsp', 'non_registered', 'tfsa']
+            if value not in valid_strategies:
+                raise serializers.ValidationError(
+                    f"withdrawal_strategy must be one of: {', '.join(valid_strategies)}"
+                )
         return value
 
     def create(self, validated_data):
