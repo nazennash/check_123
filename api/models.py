@@ -12,7 +12,7 @@ class WorkPension(models.Model):
 
 class BasicInformation(models.Model):
     user_id = models.AutoField(primary_key=True)
-    client_id = models.IntegerField()
+    client_id = models.IntegerField(unique=True)
     current_age = models.IntegerField()
     work_optional_age = models.IntegerField(null=True, blank=True)
     yearly_income_for_ideal_lifestyle = models.BigIntegerField(null=True, blank=True)
