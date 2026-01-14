@@ -1159,28 +1159,28 @@ def preprocess_retirement_plan(
     pension_data = calculate_pension_with_indexing(basic_info)
     
     # 3. Process inflation assumptions
-    print("-----")
-    print("step 4: inflation assumptions")
+    # print("-----")
+    # print("step 4: inflation assumptions")
     inflation_data = process_inflation_assumptions(basic_info)
     
     # 4. Process return assumptions
-    print("-----")
-    print("step 5: return assumptions")
+    # print("-----")
+    # print("step 5: return assumptions")
     weighted_return_data = calculate_weighted_portfolio_return(accounts)
     post_retirement_return_data = process_return_after_retirement(basic_info)
     
     # 5. Configure withdrawal strategy
-    print("-----")
-    print("step 6: withdrawal strategy configuration")
-    print(f"\n[INPUT DATA]")
-    print(f"  withdrawal_strategy: {basic_info.withdrawal_strategy}")
+    # print("-----")
+    # print("step 6: withdrawal strategy configuration")
+    # print(f"\n[INPUT DATA]")
+    # print(f"  withdrawal_strategy: {basic_info.withdrawal_strategy}")
     withdrawal_config = configure_withdrawal_strategy(basic_info)
-    print(f"\n[OUTPUT RESULTS]")
-    print(f"  strategy_name: {withdrawal_config['strategy_name']}")
-    print(f"  withdrawal_order: {withdrawal_config['withdrawal_order']}")
-    print(f"  withdrawal_rate: {withdrawal_config['withdrawal_rate'] * 100:.2f}%")
-    print(f"  description: {withdrawal_config['description']}")
-    print("-"*8)
+    # print(f"\n[OUTPUT RESULTS]")
+    # print(f"  strategy_name: {withdrawal_config['strategy_name']}")
+    # print(f"  withdrawal_order: {withdrawal_config['withdrawal_order']}")
+    # print(f"  withdrawal_rate: {withdrawal_config['withdrawal_rate'] * 100:.2f}%")
+    # print(f"  description: {withdrawal_config['description']}")
+    # print("-"*8)
     
     # 6. Preprocess life events
     print("-----")
@@ -1194,33 +1194,33 @@ def preprocess_retirement_plan(
         print(f"  Using provided events list: {len(events_data)} events")
     
     events_by_year = categorize_events_by_year(events_data)
-    print(f"\n[OUTPUT RESULTS]")
-    print(f"  Total events processed: {len(events_data)}")
-    print(f"  Events by year: {len(events_by_year)} years with events")
-    print("-"*8)
+    # print(f"\n[OUTPUT RESULTS]")
+    # print(f"  Total events processed: {len(events_data)}")
+    # print(f"  Events by year: {len(events_by_year)} years with events")
+    # print("-"*8)
     
     # 7. Prepare account data
-    print("-----")
-    print("step 8: account data preparation")
+    # print("-----")
+    # print("step 8: account data preparation")
     account_data = prepare_account_data(accounts)
     
     # 8. Calculate base income needs (inflation adjusted)
-    print("-----")
-    print("step 9: retirement income needs calculation")
+    # print("-----")
+    # print("step 9: retirement income needs calculation")
     yearly_income_goal_cents = float(basic_info.yearly_income_for_ideal_lifestyle) if basic_info.yearly_income_for_ideal_lifestyle else 0.0
     yearly_income_goal = yearly_income_goal_cents / 100
     
-    print(f"\n[INPUT DATA]")
-    print(f"  yearly_income_for_ideal_lifestyle (cents): {yearly_income_goal_cents:,.2f}")
-    print(f"  yearly_income_goal (dollars): ${yearly_income_goal:,.2f}")
-    print(f"  inflation_rate: {inflation_data['annual_rate'] * 100:.2f}%")
-    print(f"  years_to_retirement: {years_to_retirement}")
-    print(f"  years_in_retirement: {years_in_retirement}")
+    # print(f"\n[INPUT DATA]")
+    # print(f"  yearly_income_for_ideal_lifestyle (cents): {yearly_income_goal_cents:,.2f}")
+    # print(f"  yearly_income_goal (dollars): ${yearly_income_goal:,.2f}")
+    # print(f"  inflation_rate: {inflation_data['annual_rate'] * 100:.2f}%")
+    # print(f"  years_to_retirement: {years_to_retirement}")
+    # print(f"  years_in_retirement: {years_in_retirement}")
     
     # Calculate income needs for each retirement year
-    print(f"\n[PROCESSING]")
-    print(f"  Calculating inflated income needs for each retirement year:")
-    print(f"  Formula: Base Income × (1 + inflation_rate)^(years_to_retirement + year)")
+    # print(f"\n[PROCESSING]")
+    # print(f"  Calculating inflated income needs for each retirement year:")
+    # print(f"  Formula: Base Income × (1 + inflation_rate)^(years_to_retirement + year)")
     retirement_income_needs = {}
     for year in range(min(years_in_retirement + 1, 10)):  # Print first 10 years
         total_years = years_to_retirement + year
@@ -1240,18 +1240,18 @@ def preprocess_retirement_plan(
         )
         retirement_income_needs[year] = inflated_amount
     
-    print(f"\n[OUTPUT RESULTS]")
-    print(f"  Calculated income needs for {len(retirement_income_needs)} retirement years")
+    # print(f"\n[OUTPUT RESULTS]")
+    # print(f"  Calculated income needs for {len(retirement_income_needs)} retirement years")
     if len(retirement_income_needs) > 0:
         print(f"  Year 0 (first retirement year): ${retirement_income_needs[0]:,.2f}")
         if len(retirement_income_needs) > 1:
             print(f"  Year {len(retirement_income_needs) - 1} (last retirement year): ${retirement_income_needs[len(retirement_income_needs) - 1]:,.2f}")
     
     # 9. Compile all data
-    print("-----")
-    print("step 10: compiling preprocessed data")
-    print(f"\n[COMPILING]")
-    print(f"  Combining all processed data into final structure...")
+    # print("-----")
+    # print("step 10: compiling preprocessed data")
+    # print(f"\n[COMPILING]")
+    # print(f"  Combining all processed data into final structure...")
     
     preprocessed_data = {
         # Time and age data
@@ -1313,33 +1313,33 @@ def preprocess_retirement_plan(
     }
     
     # Add summary statistics
-    print(f"\n  Generating summary statistics...")
+    # print(f"\n  Generating summary statistics...")
     preprocessed_data['summary'] = generate_preprocessing_summary(preprocessed_data)
     
-    print(f"\n[FINAL PREPROCESSED DATA SUMMARY]")
-    print(f"  Time Periods:")
-    print(f"    Current age: {preprocessed_data['current_age']}")
-    print(f"    Retirement age: {preprocessed_data['retirement_age']}")
-    print(f"    Years to retirement: {preprocessed_data['years_to_retirement']}")
-    print(f"    Years in retirement: {preprocessed_data['years_in_retirement']}")
-    print(f"  Government Benefits:")
-    print(f"    CPP (adjusted): ${preprocessed_data['cpp_adjusted']:,.2f}/year")
-    print(f"    OAS (adjusted): ${preprocessed_data['oas_adjusted']:,.2f}/year")
-    print(f"    Pension: ${preprocessed_data['pension_amount']:,.2f}/year")
-    print(f"  Assumptions:")
-    print(f"    Inflation rate: {preprocessed_data['inflation_rate'] * 100:.2f}%")
-    print(f"    Accumulation return: {preprocessed_data['accumulation_returns']['weighted_return'] * 100:.2f}%")
-    print(f"    Retirement return: {preprocessed_data['return_after_retirement'] * 100:.2f}%")
-    print(f"  Accounts:")
-    print(f"    Total balance: ${preprocessed_data['account_data']['total_balance']:,.2f}")
-    print(f"    Total annual contributions: ${preprocessed_data['account_data']['total_annual_contribution']:,.2f}")
-    print(f"  Income Goals:")
-    print(f"    Base income goal: ${preprocessed_data['yearly_income_goal']:,.2f}/year")
-    print(f"    First retirement year need: ${preprocessed_data['retirement_income_needs'][0]:,.2f}/year" if preprocessed_data['retirement_income_needs'] else "    No retirement income needs calculated")
+    # print(f"\n[FINAL PREPROCESSED DATA SUMMARY]")
+    # print(f"  Time Periods:")
+    # print(f"    Current age: {preprocessed_data['current_age']}")
+    # print(f"    Retirement age: {preprocessed_data['retirement_age']}")
+    # print(f"    Years to retirement: {preprocessed_data['years_to_retirement']}")
+    # print(f"    Years in retirement: {preprocessed_data['years_in_retirement']}")
+    # print(f"  Government Benefits:")
+    # print(f"    CPP (adjusted): ${preprocessed_data['cpp_adjusted']:,.2f}/year")
+    # print(f"    OAS (adjusted): ${preprocessed_data['oas_adjusted']:,.2f}/year")
+    # print(f"    Pension: ${preprocessed_data['pension_amount']:,.2f}/year")
+    # print(f"  Assumptions:")
+    # print(f"    Inflation rate: {preprocessed_data['inflation_rate'] * 100:.2f}%")
+    # print(f"    Accumulation return: {preprocessed_data['accumulation_returns']['weighted_return'] * 100:.2f}%")
+    # print(f"    Retirement return: {preprocessed_data['return_after_retirement'] * 100:.2f}%")
+    # print(f"  Accounts:")
+    # print(f"    Total balance: ${preprocessed_data['account_data']['total_balance']:,.2f}")
+    # print(f"    Total annual contributions: ${preprocessed_data['account_data']['total_annual_contribution']:,.2f}")
+    # print(f"  Income Goals:")
+    # print(f"    Base income goal: ${preprocessed_data['yearly_income_goal']:,.2f}/year")
+    # print(f"    First retirement year need: ${preprocessed_data['retirement_income_needs'][0]:,.2f}/year" if preprocessed_data['retirement_income_needs'] else "    No retirement income needs calculated")
     
-    print("-----")
-    print("preprocessing complete")
-    print("-----")
+    # print("-----")
+    # print("preprocessing complete")
+    # print("-----")
     
     return preprocessed_data
 
