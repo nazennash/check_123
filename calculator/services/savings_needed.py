@@ -130,9 +130,9 @@ def calculate_savings_needed_pv(
         Shortfall: $30,000/year (after $20k in benefits)
         Result: ~$650,000 needed at retirement
     """
-    print("\n" + "="*80)
+    print("\n" + "-"*8)
     print("SAVINGS NEEDED CALCULATION (PRESENT VALUE)")
-    print("="*80)
+    print("-"*8)
     
     print("\n[INPUT DATA]")
     print(f"  Annual income need (today's dollars): ${annual_income_need:,.2f}")
@@ -192,7 +192,7 @@ def calculate_savings_needed_pv(
     
     print(f"\n[OUTPUT RESULTS]")
     print(f"  Savings needed at retirement: ${pv:,.2f}")
-    print("="*80)
+    print("-"*8)
     
     return pv
 

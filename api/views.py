@@ -432,7 +432,7 @@ def get_monte_carlo(request, client_id):
         years_in_retirement = len(withdrawal_breakdown)
         
         # Run enhanced Monte Carlo simulation with time series
-        from calculator.services.monte_carlo_enhanced import run_monte_carlo_with_time_series
+        from calculator.services.monte_carlo import run_monte_carlo_with_time_series
         
         monte_carlo_results = run_monte_carlo_with_time_series(
             accumulation_breakdown=accumulation_breakdown,

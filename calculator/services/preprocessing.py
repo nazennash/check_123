@@ -340,7 +340,7 @@ def calculate_pension_with_indexing(basic_info: BasicInformation) -> Dict[str, A
         }
         print(f"\n[OUTPUT RESULTS]")
         print(f"  has_pension: {result['has_pension']}")
-        print("="*80)
+        print("-"*8)
         return result
     
     pension = basic_info.has_work_pension
@@ -438,7 +438,7 @@ def calculate_pension_with_indexing(basic_info: BasicInformation) -> Dict[str, A
     print(f"  start_calendar_year: {result['start_calendar_year']} (actual calendar year)")
     print(f"  indexed_amounts (by year offset): {len(result['indexed_amounts'])} years calculated")
     print(f"  indexed_amounts_by_age: {len(result['indexed_amounts_by_age'])} ages calculated")
-    print("="*80)
+    print("-"*8)
     
     return result
 
@@ -493,7 +493,7 @@ def process_inflation_assumptions(basic_info: BasicInformation) -> Dict[str, Any
     print(f"  annual_rate: {result['annual_rate']:.4f} = {result['annual_rate'] * 100:.2f}%")
     print(f"  monthly_rate: {result['monthly_rate']:.6f} = {result['monthly_rate'] * 100:.4f}%")
     print(f"  compounding_factor: {result['compounding_factor']:.4f}")
-    print("="*80)
+    print("-"*8)
     
     return result
 
@@ -573,9 +573,9 @@ def calculate_weighted_portfolio_return(accounts: List[InvestmentAccount]) -> Di
         - If no balances, weight by contributions
         - Default to 5% if no data
     """
-    print("\n" + "="*80)
+    print("\n" + "-"*8)
     print("WEIGHTED PORTFOLIO RETURN CALCULATION")
-    print("="*80)
+    print("-"*8)
     
     # INPUT DATA
     print("\n[INPUT DATA]")
@@ -681,7 +681,7 @@ def calculate_weighted_portfolio_return(accounts: List[InvestmentAccount]) -> Di
     print(f"  total_balance: ${result['total_balance'] / 100:,.2f}")
     print(f"  weighting_method: {result['weighting_method']}")
     print(f"  account_count: {result['account_count']}")
-    print("="*80)
+    print("-"*8)
     
     return result
 
@@ -690,9 +690,9 @@ def process_return_after_retirement(basic_info: BasicInformation) -> Dict[str, A
     """
     Process return assumptions for the retirement phase.
     """
-    print("\n" + "="*80)
+    print("\n" + "-"*8)
     print("POST-RETIREMENT RETURN PROCESSING")
-    print("="*80)
+    print("-"*8)
     
     # INPUT DATA
     print("\n[INPUT DATA]")
@@ -731,7 +731,7 @@ def process_return_after_retirement(basic_info: BasicInformation) -> Dict[str, A
     print(f"  monthly_return: {result['monthly_return']:.6f} = {result['monthly_return'] * 100:.4f}%")
     print(f"  is_conservative: {result['is_conservative']}")
     print(f"  is_growth: {result['is_growth']}")
-    print("="*80)
+    print("-"*8)
     
     return result
 
@@ -987,9 +987,9 @@ def prepare_account_data(accounts: List[InvestmentAccount]) -> Dict[str, Any]:
     
     RETURNS: Dictionary with all account data organized by type
     """
-    print("\n" + "="*80)
+    print("\n" + "-"*8)
     print("ACCOUNT DATA PREPARATION")
-    print("="*80)
+    print("-"*8)
     
     # INPUT DATA
     print("\n[INPUT DATA]")
@@ -1090,7 +1090,7 @@ def prepare_account_data(accounts: List[InvestmentAccount]) -> Dict[str, Any]:
     print(f"  total_balance: ${result['total_balance']:,.2f}")
     print(f"  total_annual_contribution: ${result['total_annual_contribution']:,.2f}")
     print(f"  account_count: {result['account_count']}")
-    print("="*80)
+    print("-"*8)
     
     return result
 
@@ -1179,7 +1179,7 @@ def preprocess_retirement_plan(
     print(f"  withdrawal_order: {withdrawal_config['withdrawal_order']}")
     print(f"  withdrawal_rate: {withdrawal_config['withdrawal_rate'] * 100:.2f}%")
     print(f"  description: {withdrawal_config['description']}")
-    print("="*80)
+    print("-"*8)
     
     # 6. Preprocess life events
     print("-----")
@@ -1196,7 +1196,7 @@ def preprocess_retirement_plan(
     print(f"\n[OUTPUT RESULTS]")
     print(f"  Total events processed: {len(events_data)}")
     print(f"  Events by year: {len(events_by_year)} years with events")
-    print("="*80)
+    print("-"*8)
     
     # 7. Prepare account data
     print("-----")

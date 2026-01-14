@@ -128,9 +128,9 @@ def perform_gap_analysis(
             'surplus_amount': float        # Surplus amount (0 if no surplus)
         }
     """
-    print("\n" + "="*80)
+    print("\n" + "-"*8)
     print("GAP ANALYSIS")
-    print("="*80)
+    print("-"*8)
     
     print("\n[INPUT DATA]")
     print(f"  Projected savings at retirement: ${projected_savings:,.2f}")
@@ -185,7 +185,7 @@ def perform_gap_analysis(
     print(f"  run_out_age: {result['run_out_age']}")
     print(f"  shortfall_amount: ${result['shortfall_amount']:,.2f}")
     print(f"  surplus_amount: ${result['surplus_amount']:,.2f}")
-    print("="*80)
+    print("-"*8)
     
     return result
 
@@ -218,9 +218,9 @@ def calculate_additional_monthly_needed(
         This is a simplified calculation. More complex scenarios may require
         iterative calculations.
     """
-    print("\n" + "="*80)
+    print("\n" + "-"*8)
     print("ADDITIONAL MONTHLY CONTRIBUTION CALCULATION")
-    print("="*80)
+    print("-"*8)
     
     print("\n[INPUT DATA]")
     print(f"  Shortfall amount: ${shortfall_amount:,.2f}")
@@ -263,7 +263,7 @@ def calculate_additional_monthly_needed(
     
     print(f"\n[OUTPUT RESULTS]")
     print(f"  Additional monthly contribution needed: ${monthly_payment:,.2f}")
-    print("="*80)
+    print("-"*8)
     
     return monthly_payment
 
