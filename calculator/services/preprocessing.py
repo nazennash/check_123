@@ -51,7 +51,7 @@ WITHDRAWAL_STRATEGIES = {
 # Default Assumptions
 DEFAULT_INFLATION_RATE = 0.025  # 2.5%
 DEFAULT_RETURN_AFTER_RETIREMENT = 0.04  # 4%
-DEFAULT_PENSION_INDEXING_RATE = 0.015  # 1.5%
+DEFAULT_PENSION_INDEXING_RATE = 0.02  # 2%
 
 
 # ============================================================================
@@ -62,79 +62,233 @@ def calculate_cpp_adjustment(basic_info: BasicInformation) -> Dict[str, Any]:
     """
     Calculate CPP amount adjusted for early/late start age.
     
-    BUSINESS RULES:
-        - Standard CPP age: 65
-        - Early start (before 65): 0.6% reduction per month before 65
-          Maximum reduction: 36% at age 60
-        - Late start (after 65): 0.7% increase per month after 65
-          Maximum increase: 42% at age 70
+    BUSINESS RULES (6.1.1):
+        A) If CPP start age < 65: Apply 0.6% monthly reduction
+           monthsEarly = (65 - cpp_start_age) * 12
+           cpp_final = cpp_at_65 * (1 - 0.006 * monthsEarly)
+        B) If CPP start age > 65: Apply 0.7% monthly increase
+           monthsLate = (cpp_start_age - 65) * 12
+           cpp_final = cpp_at_65 * (1 + 0.007 * monthsLate)
+        C) Convert to annual: cpp_annual = cpp_final * 12
     
-    RETURNS: Dictionary with CPP adjustment details
+    RETURNS: Dictionary with CPP adjustment details (annual amounts)
     """
-    cpp_base = float(basic_info.cpp_amount_at_age) / 100 if basic_info.cpp_amount_at_age else 0.0
+    print("cpp adjustment")
+    print("-----")
+    
+    # input data
+    print("\n[INPUT DATA]")
+    print(f"  cpp_amount_at_age (cents): {basic_info.cpp_amount_at_age}")
+    print(f"  cpp_start_age: {basic_info.cpp_start_age}")
+    print(f"  current_age: {basic_info.current_age}")
+    
+    # cpp_amount_at_age is the monthly amount at age 65 (cpp_at_65)
+    cpp_at_65_monthly_cents = float(basic_info.cpp_amount_at_age) if basic_info.cpp_amount_at_age else 0.0
+    cpp_at_65_monthly = cpp_at_65_monthly_cents / 100
     start_age = basic_info.cpp_start_age if basic_info.cpp_start_age else 65
-    adjustment_factor = 1.0
-    adjustment_type = "standard"
+    
+    print(f"\n[PROCESSING]")
+    print(f"  CPP monthly amount at age 65 (cpp_at_65): ${cpp_at_65_monthly:,.2f}/month")
+    print(f"  CPP start age: {start_age}")
+    print(f"  Standard CPP age: 65")
     
     if start_age < 65:
-        # Early start: reduce by 0.6% per month
+        # A) Early start: reduce by 0.6% per month
         months_early = (65 - start_age) * 12
-        reduction = min(0.006 * months_early, 0.36)  # Cap at 36%
-        adjustment_factor = 1 - reduction
+        print(f"\n  [A) EARLY START CALCULATION]")
+        print(f"    monthsEarly = (65 - {start_age}) * 12 = {months_early} months")
+        print(f"    Reduction per month: 0.6%")
+        print(f"    Total reduction: 0.006 * {months_early} = {0.006 * months_early:.4f} = {0.006 * months_early * 100:.2f}%")
+        
+        # Apply formula: cpp_final = cpp_at_65 * (1 - 0.006 * monthsEarly)
+        cpp_final_monthly = cpp_at_65_monthly * (1 - 0.006 * months_early)
+        adjustment_factor = 1 - 0.006 * months_early
         adjustment_type = "early"
+        
+        print(f"    cpp_final (monthly) = cpp_at_65 × (1 - 0.006 × monthsEarly)")
+        print(f"    cpp_final (monthly) = ${cpp_at_65_monthly:,.2f} × (1 - {0.006 * months_early:.4f})")
+        print(f"    cpp_final (monthly) = ${cpp_at_65_monthly:,.2f} × {adjustment_factor:.4f} = ${cpp_final_monthly:,.2f}/month")
+        
     elif start_age > 65:
-        # Late start: increase by 0.7% per month
+        # B) Late start: increase by 0.7% per month
         months_late = (start_age - 65) * 12
-        increase = min(0.007 * months_late, 0.42)  # Cap at 42%
-        adjustment_factor = 1 + increase
+        print(f"\n  [B) LATE START CALCULATION]")
+        print(f"    monthsLate = ({start_age} - 65) * 12 = {months_late} months")
+        print(f"    Increase per month: 0.7%")
+        print(f"    Total increase: 0.007 * {months_late} = {0.007 * months_late:.4f} = {0.007 * months_late * 100:.2f}%")
+        
+        # Apply formula: cpp_final = cpp_at_65 * (1 + 0.007 * monthsLate)
+        cpp_final_monthly = cpp_at_65_monthly * (1 + 0.007 * months_late)
+        adjustment_factor = 1 + 0.007 * months_late
         adjustment_type = "late"
+        
+        print(f"    cpp_final (monthly) = cpp_at_65 × (1 + 0.007 × monthsLate)")
+        print(f"    cpp_final (monthly) = ${cpp_at_65_monthly:,.2f} × (1 + {0.007 * months_late:.4f})")
+        print(f"    cpp_final (monthly) = ${cpp_at_65_monthly:,.2f} × {adjustment_factor:.4f} = ${cpp_final_monthly:,.2f}/month")
+        
+    else:
+        # Start age = 65, no adjustment
+        print(f"\n  [STANDARD START]")
+        print(f"    Start age is 65, no adjustment needed")
+        cpp_final_monthly = cpp_at_65_monthly
+        adjustment_factor = 1.0
+        adjustment_type = "standard"
+        print(f"    cpp_final (monthly) = cpp_at_65 = ${cpp_final_monthly:,.2f}/month")
     
-    adjusted_amount = cpp_base * adjustment_factor
+    # C) Convert to annual: cpp_annual = cpp_final * 12
+    cpp_annual = cpp_final_monthly * 12
+    print(f"\n  [C) CONVERT TO ANNUAL]")
+    print(f"    cpp_annual = cpp_final × 12")
+    print(f"    cpp_annual = ${cpp_final_monthly:,.2f} × 12 = ${cpp_annual:,.2f}/year")
     
-    return {
-        'base_amount': cpp_base,
+    # Calculate years until CPP starts
+    start_year = start_age - basic_info.current_age if start_age > basic_info.current_age else 0
+    current_year = datetime.now().year
+    start_calendar_year = current_year + start_year if start_year > 0 else current_year
+    
+    print(f"\n  [TIMING INFORMATION]")
+    print(f"    Current age: {basic_info.current_age}")
+    print(f"    CPP start age: {start_age}")
+    print(f"    Years until CPP starts: {start_age} - {basic_info.current_age} = {start_year} years")
+    if start_year > 0:
+        print(f"    CPP will start in year: {start_calendar_year} (in {start_year} years)")
+    else:
+        print(f"    CPP starts now (current year: {start_calendar_year})")
+    
+    result = {
+        'base_amount': cpp_annual,  # Store annual amount
+        'base_monthly': cpp_at_65_monthly,  # Store original monthly at 65
+        'final_monthly': cpp_final_monthly,  # Store adjusted monthly
         'start_age': start_age,
-        'adjusted_amount': adjusted_amount,
+        'adjusted_amount': cpp_annual,  # Annual adjusted amount
         'adjustment_factor': adjustment_factor,
         'adjustment_type': adjustment_type,
-        'start_year': start_age - basic_info.current_age if start_age > basic_info.current_age else 0
+        'start_year': start_year,  # Years until start (not calendar year)
+        'start_calendar_year': start_calendar_year  # Actual calendar year
     }
+    
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  base_amount (annual): ${result['base_amount']:,.2f}/year")
+    print(f"  base_monthly (at 65): ${result['base_monthly']:,.2f}/month")
+    print(f"  final_monthly (adjusted): ${result['final_monthly']:,.2f}/month")
+    print(f"  start_age: {result['start_age']} years old")
+    print(f"  adjusted_amount (annual): ${result['adjusted_amount']:,.2f}/year")
+    print(f"  adjustment_factor: {result['adjustment_factor']:.4f}")
+    print(f"  adjustment_type: {result['adjustment_type']}")
+    print(f"  start_year: {result['start_year']} years from now")
+    print(f"  start_calendar_year: {result['start_calendar_year']}")
+    
+    
+    return result
 
 
 def calculate_oas_adjustment(basic_info: BasicInformation) -> Dict[str, Any]:
     """
     Calculate OAS amount adjusted for late start age.
     
-    BUSINESS RULES:
-        - Standard OAS age: 65
-        - OAS cannot be taken early (before 65)
-        - Late start (after 65): 0.6% increase per month after 65
-          Maximum increase: 36% at age 70
+    BUSINESS RULES (6.1.2):
+        OAS cannot start before 65.
+        A) If OAS start age > 65:
+           monthsLate = (oas_start_age - 65) * 12
+           oas_final = oas_at_65 * (1 + 0.006 * monthsLate)
+           oas_annual = oas_final * 12
+        B) If OAS start age = 65:
+           oas_final = oas_at_65
+           oas_annual = oas_final * 12
     
-    RETURNS: Dictionary with OAS adjustment details
+    RETURNS: Dictionary with OAS adjustment details (annual amounts)
     """
-    oas_base = float(basic_info.oas_amount_at_OAS_age) / 100 if basic_info.oas_amount_at_OAS_age else 0.0
-    start_age = max(basic_info.oas_start_age if basic_info.oas_start_age else 65, 65)  # Cannot start before 65
-    adjustment_factor = 1.0
-    adjustment_type = "standard"
+    print("-----")
+    print("oas adjustment")
+    
+    # INPUT DATA
+    print("\n[INPUT DATA]")
+    print(f"  oas_amount_at_OAS_age (cents): {basic_info.oas_amount_at_OAS_age}")
+    print(f"  oas_start_age: {basic_info.oas_start_age}")
+    print(f"  current_age: {basic_info.current_age}")
+    
+    # oas_amount_at_OAS_age is the monthly amount at age 65 (oas_at_65)
+    oas_at_65_monthly_cents = float(basic_info.oas_amount_at_OAS_age) if basic_info.oas_amount_at_OAS_age else 0.0
+    oas_at_65_monthly = oas_at_65_monthly_cents / 100
+    requested_start_age = basic_info.oas_start_age if basic_info.oas_start_age else 65
+    start_age = max(requested_start_age, 65)  # Cannot start before 65
+    
+    print(f"\n[PROCESSING]")
+    print(f"  OAS monthly amount at age 65 (oas_at_65): ${oas_at_65_monthly:,.2f}/month")
+    print(f"  Requested OAS start age: {requested_start_age}")
+    print(f"  Adjusted start age (cannot be < 65): {start_age}")
+    print(f"  Standard OAS age: 65")
     
     if start_age > 65:
-        # Late start: increase by 0.6% per month
+        # A) Late start: increase by 0.6% per month
         months_late = (start_age - 65) * 12
-        increase = min(0.006 * months_late, 0.36)  # Cap at 36%
-        adjustment_factor = 1 + increase
+        print(f"\n  [A) LATE START CALCULATION]")
+        print(f"    monthsLate = ({start_age} - 65) * 12 = {months_late} months")
+        print(f"    Increase per month: 0.6%")
+        print(f"    Total increase: 0.006 * {months_late} = {0.006 * months_late:.4f} = {0.006 * months_late * 100:.2f}%")
+        
+        # Apply formula: oas_final = oas_at_65 * (1 + 0.006 * monthsLate)
+        oas_final_monthly = oas_at_65_monthly * (1 + 0.006 * months_late)
+        adjustment_factor = 1 + 0.006 * months_late
         adjustment_type = "late"
+        
+        print(f"    oas_final (monthly) = oas_at_65 × (1 + 0.006 × monthsLate)")
+        print(f"    oas_final (monthly) = ${oas_at_65_monthly:,.2f} × (1 + {0.006 * months_late:.4f})")
+        print(f"    oas_final (monthly) = ${oas_at_65_monthly:,.2f} × {adjustment_factor:.4f} = ${oas_final_monthly:,.2f}/month")
+        
+    else:
+        # B) Start age = 65, no adjustment
+        print(f"\n  [B) STANDARD START]")
+        print(f"    Start age is 65, no adjustment needed")
+        oas_final_monthly = oas_at_65_monthly
+        adjustment_factor = 1.0
+        adjustment_type = "standard"
+        print(f"    oas_final (monthly) = oas_at_65 = ${oas_final_monthly:,.2f}/month")
     
-    adjusted_amount = oas_base * adjustment_factor
+    # Convert to annual: oas_annual = oas_final * 12
+    oas_annual = oas_final_monthly * 12
+    print(f"\n  [CONVERT TO ANNUAL]")
+    print(f"    oas_annual = oas_final × 12")
+    print(f"    oas_annual = ${oas_final_monthly:,.2f} × 12 = ${oas_annual:,.2f}/year")
     
-    return {
-        'base_amount': oas_base,
+    # Calculate years until OAS starts
+    start_year = start_age - basic_info.current_age if start_age > basic_info.current_age else 0
+    current_year = datetime.now().year
+    start_calendar_year = current_year + start_year if start_year > 0 else current_year
+    
+    print(f"\n  [TIMING INFORMATION]")
+    print(f"    Current age: {basic_info.current_age}")
+    print(f"    OAS start age: {start_age}")
+    print(f"    Years until OAS starts: {start_age} - {basic_info.current_age} = {start_year} years")
+    if start_year > 0:
+        print(f"    OAS will start in year: {start_calendar_year} (in {start_year} years)")
+    else:
+        print(f"    OAS starts now (current year: {start_calendar_year})")
+    
+    result = {
+        'base_amount': oas_annual,  # Store annual amount
+        'base_monthly': oas_at_65_monthly,  # Store original monthly at 65
+        'final_monthly': oas_final_monthly,  # Store adjusted monthly
         'start_age': start_age,
-        'adjusted_amount': adjusted_amount,
+        'adjusted_amount': oas_annual,  # Annual adjusted amount
         'adjustment_factor': adjustment_factor,
         'adjustment_type': adjustment_type,
-        'start_year': start_age - basic_info.current_age if start_age > basic_info.current_age else 0
+        'start_year': start_year,  # Years until start (not calendar year)
+        'start_calendar_year': start_calendar_year  # Actual calendar year
     }
+    
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  base_amount (annual): ${result['base_amount']:,.2f}/year")
+    print(f"  base_monthly (at 65): ${result['base_monthly']:,.2f}/month")
+    print(f"  final_monthly (adjusted): ${result['final_monthly']:,.2f}/month")
+    print(f"  start_age: {result['start_age']} years old")
+    print(f"  adjusted_amount (annual): ${result['adjusted_amount']:,.2f}/year")
+    print(f"  adjustment_factor: {result['adjustment_factor']:.4f}")
+    print(f"  adjustment_type: {result['adjustment_type']}")
+    print(f"  start_year: {result['start_year']} years from now")
+    print(f"  start_calendar_year: {result['start_calendar_year']}")
+    
+    return result
 
 
 # ============================================================================
@@ -145,46 +299,148 @@ def calculate_pension_with_indexing(basic_info: BasicInformation) -> Dict[str, A
     """
     Calculate pension amounts with indexing rules applied.
     
-    BUSINESS RULES:
-        - Indexing starts at pension start age
-        - Annual indexing based on DEFAULT_PENSION_INDEXING_RATE (1.5%)
-        - Returns indexed amounts for each retirement year
+    BUSINESS RULES (6.1.3):
+        A) Base annual pension:
+           pension_base_annual = pension_monthly * 12
+        
+        B) Pension indexing (after pension starts only):
+           if age < pension_start_age:
+               pension_annual[age] = 0
+           if age == pension_start_age:
+               pension_annual[age] = pension_base_annual
+           if age > pension_start_age:
+               years_since_start = age - pension_start_age
+               pension_annual[age] = pension_base_annual * (1 + pension_index_rate) ^ years_since_start
     
     RETURNS: Dictionary with pension calculation details
     """
+    print("-----")
+    print("pension indexing")
+    
+    
+    # INPUT DATA
+    print("\n[INPUT DATA]")
+    print(f"  has_work_pension: {basic_info.has_work_pension is not None}")
+    if basic_info.has_work_pension:
+        print(f"  has_pension (flag): {basic_info.has_work_pension.has_pension}")
+        print(f"  monthly_pension_amount (cents): {basic_info.has_work_pension.monthly_pension_amount}")
+        print(f"  pension_start_age: {basic_info.has_work_pension.pension_start_age}")
+    print(f"  current_age: {basic_info.current_age}")
+    print(f"  Default indexing rate: {DEFAULT_PENSION_INDEXING_RATE * 100:.2f}%")
+    
     if not basic_info.has_work_pension or not basic_info.has_work_pension.has_pension:
-        return {
+        print(f"\n[PROCESSING]")
+        print(f"  No pension data available, returning zeros")
+        result = {
             'has_pension': False,
             'base_amount': 0.0,
             'indexing_rate': 0.0,
             'start_age': 0,
             'indexed_amounts': {}
         }
+        print(f"\n[OUTPUT RESULTS]")
+        print(f"  has_pension: {result['has_pension']}")
+        print("="*80)
+        return result
     
     pension = basic_info.has_work_pension
-    base_amount = float(pension.monthly_pension_amount) / 100 * 12 if pension.monthly_pension_amount else 0.0
+    monthly_amount_cents = float(pension.monthly_pension_amount) if pension.monthly_pension_amount else 0.0
+    monthly_amount_dollars = monthly_amount_cents / 100
     indexing_rate = DEFAULT_PENSION_INDEXING_RATE
     start_age = pension.pension_start_age if pension.pension_start_age else 65
     
-    # Calculate start year relative to current age
-    start_year = max(0, start_age - basic_info.current_age)
+    # A) Base annual pension
+    print(f"\n[A) BASE ANNUAL PENSION]")
+    print(f"  Monthly pension (cents): {monthly_amount_cents:,.2f}")
+    print(f"  Monthly pension (dollars): ${monthly_amount_dollars:,.2f}")
+    print(f"  Formula: pension_base_annual = pension_monthly × 12")
+    pension_base_annual = monthly_amount_dollars * 12
+    print(f"  pension_base_annual = ${monthly_amount_dollars:,.2f} × 12 = ${pension_base_annual:,.2f}/year")
+    print(f"  Pension start age: {start_age}")
+    print(f"  Indexing rate: {indexing_rate * 100:.2f}% per year")
     
-    # Pre-calculate indexed amounts for first 30 years of retirement
-    indexed_amounts = {}
+    # B) Pension indexing (after pension starts only)
+    print(f"\n[B) PENSION INDEXING CALCULATIONS]")
+    print(f"  Calculating pension amounts by age:")
+    print(f"  Rules:")
+    print(f"    - if age < pension_start_age: pension_annual[age] = 0")
+    print(f"    - if age == pension_start_age: pension_annual[age] = pension_base_annual")
+    print(f"    - if age > pension_start_age: pension_annual[age] = pension_base_annual × (1 + rate)^years_since_start")
+    
+    # Calculate indexed amounts by age (from current age to 30 years into retirement)
+    current_age = basic_info.current_age
+    plan_until_age = basic_info.plan_until_age if basic_info.plan_until_age else 90
+    indexed_amounts = {}  # Keyed by age
+    
+    print(f"\n  [CALCULATIONS BY AGE]")
+    for age in range(current_age, min(plan_until_age + 1, current_age + 50)):  # Up to 50 years ahead
+        if age < start_age:
+            # Rule: if age < pension_start_age: pension_annual[age] = 0
+            pension_annual = 0.0
+            indexed_amounts[age] = pension_annual
+            if age <= start_age + 2:  # Print ages around start
+                print(f"    Age {age}: {age} < {start_age} → pension_annual = $0.00")
+                
+        elif age == start_age:
+            # Rule: if age == pension_start_age: pension_annual[age] = pension_base_annual
+            pension_annual = pension_base_annual
+            indexed_amounts[age] = pension_annual
+            print(f"    Age {age}: {age} == {start_age} → pension_annual = ${pension_annual:,.2f}")
+            
+        else:
+            # Rule: if age > pension_start_age:
+            # pension_annual[age] = pension_base_annual * (1 + pension_index_rate) ^ years_since_start
+            years_since_start = age - start_age
+            pension_annual = pension_base_annual * ((1 + indexing_rate) ** years_since_start)
+            indexed_amounts[age] = pension_annual
+            if years_since_start <= 5 or years_since_start % 5 == 0:  # Print first 5 and every 5th year
+                print(f"    Age {age}: {age} > {start_age}, years_since_start = {years_since_start}")
+                print(f"      pension_annual = ${pension_base_annual:,.2f} × (1 + {indexing_rate:.4f})^{years_since_start}")
+                print(f"      pension_annual = ${pension_base_annual:,.2f} × {(1 + indexing_rate) ** years_since_start:.4f} = ${pension_annual:,.2f}")
+    
+    # Also create year_offset indexed amounts for backward compatibility
+    year_offset_amounts = {}
+    start_year = max(0, start_age - current_age)
+    current_year = datetime.now().year
+    start_calendar_year = current_year + start_year if start_year > 0 else current_year
+    
     for year_offset in range(0, 31):  # Up to 30 years of retirement
-        if year_offset >= start_year:
-            years_of_indexing = year_offset - start_year
-            indexed_amount = base_amount * ((1 + indexing_rate) ** years_of_indexing)
-            indexed_amounts[year_offset] = indexed_amount
+        age = current_age + year_offset
+        if age in indexed_amounts:
+            year_offset_amounts[year_offset] = indexed_amounts[age]
     
-    return {
+    print(f"\n  [TIMING INFORMATION]")
+    print(f"    Current age: {current_age}")
+    print(f"    Pension start age: {start_age}")
+    print(f"    Years until pension starts: {start_age} - {current_age} = {start_year} years")
+    if start_year > 0:
+        print(f"    Pension will start in year: {start_calendar_year} (in {start_year} years)")
+    else:
+        print(f"    Pension starts now (current year: {start_calendar_year})")
+    
+    result = {
         'has_pension': True,
-        'base_amount': base_amount,
+        'base_amount': pension_base_annual,
         'indexing_rate': indexing_rate,
         'start_age': start_age,
-        'start_year': start_year,
-        'indexed_amounts': indexed_amounts
+        'start_year': start_year,  # Years until start (not calendar year)
+        'start_calendar_year': start_calendar_year,  # Actual calendar year
+        'indexed_amounts': year_offset_amounts,  # By year offset for backward compatibility
+        'indexed_amounts_by_age': indexed_amounts  # By actual age (new)
     }
+    
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  has_pension: {result['has_pension']}")
+    print(f"  base_amount (pension_base_annual): ${result['base_amount']:,.2f}/year")
+    print(f"  indexing_rate: {result['indexing_rate'] * 100:.2f}%")
+    print(f"  start_age: {result['start_age']} years old")
+    print(f"  start_year: {result['start_year']} years from now (NOT a calendar year)")
+    print(f"  start_calendar_year: {result['start_calendar_year']} (actual calendar year)")
+    print(f"  indexed_amounts (by year offset): {len(result['indexed_amounts'])} years calculated")
+    print(f"  indexed_amounts_by_age: {len(result['indexed_amounts_by_age'])} ages calculated")
+    print("="*80)
+    
+    return result
 
 
 # ============================================================================
@@ -197,13 +453,49 @@ def process_inflation_assumptions(basic_info: BasicInformation) -> Dict[str, Any
     
     RETURNS: Dictionary with inflation configuration
     """
+    
+    print("-----")
+    print("inflation assumptions")
+
+    
+    # INPUT DATA
+    print("\n[INPUT DATA]")
+    print(f"  inflation_rate (percentage): {basic_info.inflation_rate}")
+    print(f"  DEFAULT_INFLATION_RATE: {DEFAULT_INFLATION_RATE * 100:.2f}%")
+    
+    inflation_rate_percent = float(basic_info.inflation_rate) if basic_info.inflation_rate else None
     inflation_rate = float(basic_info.inflation_rate) / 100 if basic_info.inflation_rate else DEFAULT_INFLATION_RATE
     
-    return {
+    print(f"\n[PROCESSING]")
+    if inflation_rate_percent is not None:
+        print(f"  User-provided inflation rate: {inflation_rate_percent:.2f}%")
+        print(f"  Converted to decimal: {inflation_rate_percent}% ÷ 100 = {inflation_rate:.4f}")
+    else:
+        print(f"  No user-provided rate, using default: {DEFAULT_INFLATION_RATE * 100:.2f}%")
+        print(f"  Annual rate (decimal): {inflation_rate:.4f}")
+    
+    monthly_rate = ((1 + inflation_rate) ** (1/12)) - 1
+    compounding_factor = 1 + inflation_rate
+    
+    print(f"\n  [CALCULATIONS]")
+    print(f"    Annual rate (decimal): {inflation_rate:.4f} = {inflation_rate * 100:.2f}%")
+    print(f"    Monthly rate formula: (1 + annual_rate)^(1/12) - 1")
+    print(f"    Monthly rate: (1 + {inflation_rate:.4f})^(1/12) - 1 = {monthly_rate:.6f} = {monthly_rate * 100:.4f}%")
+    print(f"    Compounding factor: 1 + {inflation_rate:.4f} = {compounding_factor:.4f}")
+    
+    result = {
         'annual_rate': inflation_rate,
-        'monthly_rate': ((1 + inflation_rate) ** (1/12)) - 1,
-        'compounding_factor': 1 + inflation_rate
+        'monthly_rate': monthly_rate,
+        'compounding_factor': compounding_factor
     }
+    
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  annual_rate: {result['annual_rate']:.4f} = {result['annual_rate'] * 100:.2f}%")
+    print(f"  monthly_rate: {result['monthly_rate']:.6f} = {result['monthly_rate'] * 100:.4f}%")
+    print(f"  compounding_factor: {result['compounding_factor']:.4f}")
+    print("="*80)
+    
+    return result
 
 
 def apply_inflation_to_amount(
@@ -221,9 +513,14 @@ def apply_inflation_to_amount(
     if monthly:
         periods = years * 12
         monthly_rate = ((1 + inflation_rate) ** (1/12)) - 1
-        return base_amount * ((1 + monthly_rate) ** periods)
+        result = base_amount * ((1 + monthly_rate) ** periods)
+        print(f"      [INFLATION CALC] Monthly: ${base_amount:,.2f} × (1 + {monthly_rate:.6f})^{periods} = ${result:,.2f}")
+        return result
     else:
-        return base_amount * ((1 + inflation_rate) ** years)
+        result = base_amount * ((1 + inflation_rate) ** years)
+        if years > 0:
+            print(f"      [INFLATION CALC] Annual: ${base_amount:,.2f} × (1 + {inflation_rate:.4f})^{years} = ${result:,.2f}")
+        return result
 
 
 def calculate_inflation_adjusted_series(
@@ -257,6 +554,8 @@ def get_account_return_profile(account: InvestmentAccount) -> Dict[str, Any]:
     profile = account.investment_profile.lower() if account.investment_profile else 'balanced'
     expected_return = PROFILE_RETURNS.get(profile, 0.05)  # Default to balanced
     
+    print(f"      Account Profile: {profile} → Expected Return: {expected_return * 100:.2f}%")
+    
     return {
         'profile': profile,
         'expected_return': expected_return,
@@ -274,15 +573,45 @@ def calculate_weighted_portfolio_return(accounts: List[InvestmentAccount]) -> Di
         - If no balances, weight by contributions
         - Default to 5% if no data
     """
+    print("\n" + "="*80)
+    print("WEIGHTED PORTFOLIO RETURN CALCULATION")
+    print("="*80)
+    
+    # INPUT DATA
+    print("\n[INPUT DATA]")
+    print(f"  Number of accounts: {len(accounts)}")
+    for i, acc in enumerate(accounts, 1):
+        print(f"  Account {i}:")
+        print(f"    Type: {acc.account_type}")
+        print(f"    Balance (cents): {acc.balance}")
+        print(f"    Monthly contribution (cents): {acc.monthly_contribution}")
+        print(f"    Investment profile: {acc.investment_profile}")
+    
     # Calculate total balance
     total_balance = sum(float(acc.balance) for acc in accounts)
+    print(f"\n  Total balance (cents): {total_balance:,.2f}")
+    print(f"  Total balance (dollars): ${total_balance / 100:,.2f}")
+    
+    print(f"\n[PROCESSING]")
     
     if total_balance > 0:
         # Weight by balances (convert from cents to dollars)
-        weighted_return = sum(
-            (float(acc.balance) / 100) * get_account_return_profile(acc)['expected_return']
-            for acc in accounts
-        ) / total_balance
+        print(f"  [METHOD: Weight by Balances]")
+        print(f"  Formula: Σ(balance × return) / total_balance")
+        print(f"\n  Calculations per account:")
+        
+        weighted_sum = 0
+        for acc in accounts:
+            balance_dollars = float(acc.balance) / 100
+            profile_data = get_account_return_profile(acc)
+            expected_return = profile_data['expected_return']
+            weighted_value = balance_dollars * expected_return
+            weighted_sum += weighted_value
+            weight_pct = (balance_dollars / (total_balance / 100)) * 100 if total_balance > 0 else 0
+            print(f"    {acc.account_type}: ${balance_dollars:,.2f} × {expected_return * 100:.2f}% = ${weighted_value:,.2f} (weight: {weight_pct:.2f}%)")
+        
+        weighted_return = weighted_sum / (total_balance / 100)
+        print(f"\n  Weighted return = ${weighted_sum:,.2f} / ${total_balance / 100:,.2f} = {weighted_return:.4f} = {weighted_return * 100:.2f}%")
         
         # Calculate contribution weights for reference (convert from cents to dollars)
         total_contribution = sum((float(acc.monthly_contribution) / 100) for acc in accounts if acc.monthly_contribution)
@@ -293,53 +622,118 @@ def calculate_weighted_portfolio_return(accounts: List[InvestmentAccount]) -> Di
                 acc_type = acc.account_type.upper() if acc.account_type else 'NON_REG'
                 contribution_weights[acc_type] = weight
         
-        return {
+        result = {
             'weighted_return': weighted_return,
             'total_balance': total_balance,
             'weighting_method': 'balance',
             'contribution_weights': contribution_weights,
             'account_count': len(accounts)
         }
+        
     else:
         # Weight by contributions (convert from cents to dollars)
         total_contribution = sum((float(acc.monthly_contribution) / 100) for acc in accounts if acc.monthly_contribution)
+        print(f"  Total balance is 0, trying contribution weighting")
+        print(f"  Total contribution (dollars/month): ${total_contribution:,.2f}")
         
         if total_contribution > 0:
-            weighted_return = sum(
-                (float(acc.monthly_contribution) / 100) * get_account_return_profile(acc)['expected_return']
-                for acc in accounts if acc.monthly_contribution
-            ) / total_contribution
+            print(f"  [METHOD: Weight by Contributions]")
+            print(f"  Formula: Σ(contribution × return) / total_contribution")
+            print(f"\n  Calculations per account:")
             
-            return {
+            weighted_sum = 0
+            for acc in accounts:
+                if acc.monthly_contribution:
+                    contrib_dollars = float(acc.monthly_contribution) / 100
+                    profile_data = get_account_return_profile(acc)
+                    expected_return = profile_data['expected_return']
+                    weighted_value = contrib_dollars * expected_return
+                    weighted_sum += weighted_value
+                    weight_pct = (contrib_dollars / total_contribution) * 100
+                    print(f"    {acc.account_type}: ${contrib_dollars:,.2f}/month × {expected_return * 100:.2f}% = ${weighted_value:,.2f}/month (weight: {weight_pct:.2f}%)")
+            
+            weighted_return = weighted_sum / total_contribution
+            print(f"\n  Weighted return = ${weighted_sum:,.2f} / ${total_contribution:,.2f} = {weighted_return:.4f} = {weighted_return * 100:.2f}%")
+            
+            contribution_weights = {(acc.account_type.upper() if acc.account_type else 'NON_REG'): (float(acc.monthly_contribution) / 100)/total_contribution for acc in accounts if acc.monthly_contribution}
+            
+            result = {
                 'weighted_return': weighted_return,
                 'total_balance': total_balance,
                 'weighting_method': 'contribution',
-                'contribution_weights': {(acc.account_type.upper() if acc.account_type else 'NON_REG'): (float(acc.monthly_contribution) / 100)/total_contribution for acc in accounts if acc.monthly_contribution},
+                'contribution_weights': contribution_weights,
                 'account_count': len(accounts)
             }
         else:
             # Default to balanced profile
-            return {
+            print(f"  [METHOD: Default (no balance or contributions)]")
+            print(f"  Using default balanced profile: 5%")
+            result = {
                 'weighted_return': 0.05,
                 'total_balance': 0.0,
                 'weighting_method': 'default',
                 'contribution_weights': {},
                 'account_count': len(accounts)
             }
+    
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  weighted_return: {result['weighted_return']:.4f} = {result['weighted_return'] * 100:.2f}%")
+    print(f"  total_balance: ${result['total_balance'] / 100:,.2f}")
+    print(f"  weighting_method: {result['weighting_method']}")
+    print(f"  account_count: {result['account_count']}")
+    print("="*80)
+    
+    return result
 
 
 def process_return_after_retirement(basic_info: BasicInformation) -> Dict[str, Any]:
     """
     Process return assumptions for the retirement phase.
     """
+    print("\n" + "="*80)
+    print("POST-RETIREMENT RETURN PROCESSING")
+    print("="*80)
+    
+    # INPUT DATA
+    print("\n[INPUT DATA]")
+    print(f"  return_after_work_optional (percentage): {basic_info.return_after_work_optional}")
+    print(f"  DEFAULT_RETURN_AFTER_RETIREMENT: {DEFAULT_RETURN_AFTER_RETIREMENT * 100:.2f}%")
+    
+    return_rate_percent = float(basic_info.return_after_work_optional) if basic_info.return_after_work_optional else None
     return_rate = float(basic_info.return_after_work_optional) / 100 if basic_info.return_after_work_optional else DEFAULT_RETURN_AFTER_RETIREMENT
     
-    return {
+    print(f"\n[PROCESSING]")
+    if return_rate_percent is not None:
+        print(f"  User-provided return rate: {return_rate_percent:.2f}%")
+        print(f"  Converted to decimal: {return_rate_percent}% ÷ 100 = {return_rate:.4f}")
+    else:
+        print(f"  No user-provided rate, using default: {DEFAULT_RETURN_AFTER_RETIREMENT * 100:.2f}%")
+        print(f"  Annual return (decimal): {return_rate:.4f}")
+    
+    monthly_return = ((1 + return_rate) ** (1/12)) - 1
+    
+    print(f"\n  [CALCULATIONS]")
+    print(f"    Annual return (decimal): {return_rate:.4f} = {return_rate * 100:.2f}%")
+    print(f"    Monthly return formula: (1 + annual_return)^(1/12) - 1")
+    print(f"    Monthly return: (1 + {return_rate:.4f})^(1/12) - 1 = {monthly_return:.6f} = {monthly_return * 100:.4f}%")
+    print(f"    Is conservative (< 5%): {return_rate < 0.05}")
+    print(f"    Is growth (>= 7%): {return_rate >= 0.07}")
+    
+    result = {
         'annual_return': return_rate,
-        'monthly_return': ((1 + return_rate) ** (1/12)) - 1,
+        'monthly_return': monthly_return,
         'is_conservative': return_rate < 0.05,
         'is_growth': return_rate >= 0.07
     }
+    
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  annual_return: {result['annual_return']:.4f} = {result['annual_return'] * 100:.2f}%")
+    print(f"  monthly_return: {result['monthly_return']:.6f} = {result['monthly_return'] * 100:.4f}%")
+    print(f"  is_conservative: {result['is_conservative']}")
+    print(f"  is_growth: {result['is_growth']}")
+    print("="*80)
+    
+    return result
 
 
 # ============================================================================
@@ -352,11 +746,19 @@ def configure_withdrawal_strategy(basic_info: BasicInformation) -> Dict[str, Any
     
     RETURNS: Complete withdrawal strategy configuration
     """
-    strategy = basic_info.withdrawal_strategy.lower() if basic_info.withdrawal_strategy else 'optimized'
+    print(f"\n[PROCESSING]")
+    requested_strategy = basic_info.withdrawal_strategy.lower() if basic_info.withdrawal_strategy else None
+    strategy = requested_strategy if requested_strategy else 'optimized'
+    
+    print(f"  Requested strategy: {requested_strategy if requested_strategy else 'None (using default)'}")
+    print(f"  Selected strategy: {strategy}")
+    
     withdrawal_order = WITHDRAWAL_STRATEGIES.get(strategy, WITHDRAWAL_STRATEGIES['optimized'])
+    print(f"  Withdrawal order: {' → '.join(withdrawal_order)}")
     
     # Get withdrawal rate (as decimal) - default 4%
     withdrawal_rate = 0.04
+    print(f"  Withdrawal rate: {withdrawal_rate * 100:.2f}% (default)")
     
     # Get withdrawal limits if specified
     floor_amount = 0.0
@@ -366,7 +768,7 @@ def configure_withdrawal_strategy(basic_info: BasicInformation) -> Dict[str, Any
     dynamic_adjustment = False
     guardrail_threshold = 0.2  # 20% threshold
     
-    return {
+    result = {
         'strategy_name': strategy,
         'withdrawal_order': withdrawal_order,
         'withdrawal_rate': withdrawal_rate,
@@ -377,6 +779,8 @@ def configure_withdrawal_strategy(basic_info: BasicInformation) -> Dict[str, Any
         'annual_withdrawal_sequence': generate_withdrawal_sequence(strategy, withdrawal_rate),
         'description': get_strategy_description(strategy)
     }
+    
+    return result
 
 
 def generate_withdrawal_sequence(strategy: str, withdrawal_rate: float) -> List[Dict[str, Any]]:
@@ -459,21 +863,45 @@ def preprocess_life_events(basic_info: BasicInformation) -> List[Dict[str, Any]]
     
     RETURNS: List of processed events
     """
+    print("\n[INPUT DATA]")
+    events = basic_info.life_events.all()
+    print(f"  Number of life events: {len(list(events))}")
+    print(f"  Current age: {basic_info.current_age}")
+    
     processed_events = []
     
     # Get events from basic_info
     events = basic_info.life_events.all()
     
-    for event in events:
+    print(f"\n[PROCESSING]")
+    print(f"  Processing each life event:")
+    
+    for i, event in enumerate(events, 1):
+        print(f"\n    Event {i}:")
+        print(f"      Name: {event.name}")
+        print(f"      Type: {event.event_type}")
+        print(f"      Amount (cents): {event.amount}")
+        print(f"      Frequency: {event.frequency}")
+        print(f"      Start age: {event.start_age}")
+        print(f"      End age: {event.end_age}")
+        print(f"      Account: {event.account}")
         # Calculate year of effect relative to current age
         year_of_effect = event.start_age - basic_info.current_age
+        print(f"      Year of effect: {event.start_age} - {basic_info.current_age} = {year_of_effect}")
         
         # Determine event type
         event_type = 'expenses' if event.event_type == 'expenses' else 'contribution'
+        print(f"      Event type: {event_type}")
         
         # Process event data
         amount_cents = float(event.amount) if event.amount else 0.0
         amount_dollars = amount_cents / 100
+        print(f"      Amount: {amount_cents:,.2f} cents = ${amount_dollars:,.2f}")
+        
+        duration_years = max(1, event.end_age - event.start_age) if event.end_age > event.start_age else 1
+        is_recurring = event.frequency != 'one_time'
+        print(f"      Duration: {duration_years} years")
+        print(f"      Is recurring: {is_recurring}")
         
         processed_event = {
             'id': event.id,
@@ -482,8 +910,8 @@ def preprocess_life_events(basic_info: BasicInformation) -> List[Dict[str, Any]]
             'type': event_type,
             'account_affected': event.account.upper() if event.account else 'NON_REG',
             'description': event.name if event.name else 'Life Event',
-            'is_recurring': event.frequency != 'one_time',
-            'duration_years': max(1, event.end_age - event.start_age) if event.end_age > event.start_age else 1,
+            'is_recurring': is_recurring,
+            'duration_years': duration_years,
             'inflation_adjusted': True,
             'tax_implications': False,
             'category': 'other',
@@ -495,16 +923,35 @@ def preprocess_life_events(basic_info: BasicInformation) -> List[Dict[str, Any]]
         
         # Adjust for inflation if needed
         if processed_event['inflation_adjusted'] and processed_event['year_of_effect'] > 0:
-            inflation_config = process_inflation_assumptions(basic_info)
+            # Use default or get inflation rate directly (avoid duplicate processing prints)
+            inflation_rate = float(basic_info.inflation_rate) / 100 if basic_info.inflation_rate else DEFAULT_INFLATION_RATE
+            print(f"      Applying inflation adjustment for {processed_event['year_of_effect']} years at {inflation_rate * 100:.2f}%...")
             processed_event['future_value'] = apply_inflation_to_amount(
                 processed_event['amount'],
-                inflation_config['annual_rate'],
+                inflation_rate,
                 processed_event['year_of_effect']
             )
+            print(f"      Future value: ${processed_event['future_value']:,.2f}")
         else:
             processed_event['future_value'] = processed_event['amount']
+            print(f"      No inflation adjustment (current year): ${processed_event['future_value']:,.2f}")
         
         processed_events.append(processed_event)
+    
+    # Sort events by year of effect
+    processed_events.sort(key=lambda x: x['year_of_effect'])
+    print(f"\n  Sorted {len(processed_events)} events by year of effect")
+    
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  Total processed events: {len(processed_events)}")
+    if processed_events:
+        print(f"  Event timeline:")
+        for event in processed_events[:10]:  # Show first 10
+            print(f"    Year {event['year_of_effect']}: {event['description']} - ${event['future_value']:,.2f} ({event['type']})")
+        if len(processed_events) > 10:
+            print(f"    ... and {len(processed_events) - 10} more events")
+    
+    return processed_events
     
     # Sort events by year of effect
     processed_events.sort(key=lambda x: x['year_of_effect'])
@@ -540,6 +987,21 @@ def prepare_account_data(accounts: List[InvestmentAccount]) -> Dict[str, Any]:
     
     RETURNS: Dictionary with all account data organized by type
     """
+    print("\n" + "="*80)
+    print("ACCOUNT DATA PREPARATION")
+    print("="*80)
+    
+    # INPUT DATA
+    print("\n[INPUT DATA]")
+    print(f"  Number of accounts: {len(accounts)}")
+    for i, acc in enumerate(accounts, 1):
+        print(f"  Account {i}:")
+        print(f"    ID: {acc.id}")
+        print(f"    Type: {acc.account_type}")
+        print(f"    Balance (cents): {acc.balance}")
+        print(f"    Monthly contribution (cents): {acc.monthly_contribution}")
+        print(f"    Investment profile: {acc.investment_profile}")
+    
     # Initialize account structures
     account_balances = {'TFSA': 0.0, 'RRSP': 0.0, 'NON_REG': 0.0}
     account_contributions = {'TFSA': 0.0, 'RRSP': 0.0, 'NON_REG': 0.0}
@@ -549,6 +1011,9 @@ def prepare_account_data(accounts: List[InvestmentAccount]) -> Dict[str, Any]:
     # Track individual accounts
     individual_accounts = []
     
+    print(f"\n[PROCESSING]")
+    print(f"  Processing each account:")
+    
     # Populate from accounts
     for acc in accounts:
         acc_type = acc.account_type.upper() if acc.account_type else 'NON_REG'
@@ -557,9 +1022,19 @@ def prepare_account_data(accounts: List[InvestmentAccount]) -> Dict[str, Any]:
                 acc_type = 'NON_REG'
             
             # Basic account data (convert from cents to dollars)
-            account_balances[acc_type] = float(acc.balance) / 100
-            monthly_contrib = float(acc.monthly_contribution) / 100 if acc.monthly_contribution else 0.0
-            account_contributions[acc_type] = monthly_contrib * 12  # Annual
+            balance_cents = float(acc.balance)
+            balance_dollars = balance_cents / 100
+            account_balances[acc_type] = balance_dollars
+            
+            monthly_contrib_cents = float(acc.monthly_contribution) if acc.monthly_contribution else 0.0
+            monthly_contrib_dollars = monthly_contrib_cents / 100
+            annual_contrib = monthly_contrib_dollars * 12
+            account_contributions[acc_type] = annual_contrib
+            
+            print(f"\n    {acc_type} Account:")
+            print(f"      Balance: {balance_cents:,.2f} cents = ${balance_dollars:,.2f}")
+            print(f"      Monthly contribution: {monthly_contrib_cents:,.2f} cents = ${monthly_contrib_dollars:,.2f}")
+            print(f"      Annual contribution: ${monthly_contrib_dollars:,.2f} × 12 = ${annual_contrib:,.2f}")
             
             # Return profile
             profile_data = get_account_return_profile(acc)
@@ -584,13 +1059,19 @@ def prepare_account_data(accounts: List[InvestmentAccount]) -> Dict[str, Any]:
     total_balance = sum(account_balances.values())
     total_annual_contribution = sum(account_contributions.values())
     
+    print(f"\n  [TOTALS]")
+    print(f"    Total balance across all accounts: ${total_balance:,.2f}")
+    print(f"    Total annual contribution: ${total_annual_contribution:,.2f}")
+    
     # Calculate allocation percentages
     allocation_percentages = {}
     if total_balance > 0:
+        print(f"\n  [ALLOCATION PERCENTAGES]")
         for acc_type, balance in account_balances.items():
             allocation_percentages[acc_type] = (balance / total_balance) * 100
+            print(f"    {acc_type}: ${balance:,.2f} / ${total_balance:,.2f} × 100 = {allocation_percentages[acc_type]:.2f}%")
     
-    return {
+    result = {
         'account_balances': account_balances,
         'account_contributions': account_contributions,
         'account_returns': account_returns,
@@ -601,6 +1082,17 @@ def prepare_account_data(accounts: List[InvestmentAccount]) -> Dict[str, Any]:
         'total_annual_contribution': total_annual_contribution,
         'account_count': len(accounts)
     }
+    
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  account_balances: {result['account_balances']}")
+    print(f"  account_contributions: {result['account_contributions']}")
+    print(f"  account_returns: {dict((k, f'{v*100:.2f}%') for k, v in result['account_returns'].items())}")
+    print(f"  total_balance: ${result['total_balance']:,.2f}")
+    print(f"  total_annual_contribution: ${result['total_annual_contribution']:,.2f}")
+    print(f"  account_count: {result['account_count']}")
+    print("="*80)
+    
+    return result
 
 
 # ============================================================================
@@ -620,56 +1112,147 @@ def preprocess_retirement_plan(
     
     RETURNS: Comprehensive dictionary with all processed data
     """
+    print("Pre-processing entry point")
+    # input data
+    print(f"  Client ID: {basic_info.client_id}")
+    print(f"  User ID: {basic_info.user_id}")
+    print(f"  Current Age: {basic_info.current_age}")
+    print(f"  Work Optional Age: {basic_info.work_optional_age}")
+    print(f"  Plan Until Age: {basic_info.plan_until_age}")
+    print(f"  Yearly Income Goal (cents): {basic_info.yearly_income_for_ideal_lifestyle}")
+    print(f"  Number of Accounts: {len(accounts)}")
+    print(f"  Number of Life Events: {len(list(basic_info.life_events.all())) if hasattr(basic_info, 'life_events') else 0}")
+    
     # Calculate time periods
+    print("step 1: time period")
+    print("-----")
     current_year = datetime.now().year
+    print(f"  Current year: {current_year}")
+    
     work_optional_age = basic_info.work_optional_age if basic_info.work_optional_age else basic_info.current_age + 30
+    print(f"  Work optional age: {work_optional_age}")
+    
     plan_until_age = basic_info.plan_until_age if basic_info.plan_until_age else 90
+    print(f"  Plan until age: {plan_until_age}")
+    
     years_to_retirement = max(0, work_optional_age - basic_info.current_age)
+    print(f"  Years to retirement: {work_optional_age} - {basic_info.current_age} = {years_to_retirement}")
+    
     years_in_retirement = max(0, plan_until_age - work_optional_age)
+    print(f"  Years in retirement: {plan_until_age} - {work_optional_age} = {years_in_retirement}")
+    
+    total_years = years_to_retirement + years_in_retirement
+    print(f"  Total years in plays: {total_years} years")
     
     # 1. Process government benefits
+    print("-----")
+    print("step 2: governement benefits")
+    print("-----")
     cpp_data = calculate_cpp_adjustment(basic_info)
     oas_data = calculate_oas_adjustment(basic_info)
     
     # 2. Process pension with indexing
+    print("-----")
+    print("step 3: pension processing")
+    
     pension_data = calculate_pension_with_indexing(basic_info)
     
     # 3. Process inflation assumptions
+    print("-----")
+    print("step 4: inflation assumptions")
     inflation_data = process_inflation_assumptions(basic_info)
     
     # 4. Process return assumptions
+    print("-----")
+    print("step 5: return assumptions")
     weighted_return_data = calculate_weighted_portfolio_return(accounts)
     post_retirement_return_data = process_return_after_retirement(basic_info)
     
     # 5. Configure withdrawal strategy
+    print("-----")
+    print("step 6: withdrawal strategy configuration")
+    print(f"\n[INPUT DATA]")
+    print(f"  withdrawal_strategy: {basic_info.withdrawal_strategy}")
     withdrawal_config = configure_withdrawal_strategy(basic_info)
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  strategy_name: {withdrawal_config['strategy_name']}")
+    print(f"  withdrawal_order: {withdrawal_config['withdrawal_order']}")
+    print(f"  withdrawal_rate: {withdrawal_config['withdrawal_rate'] * 100:.2f}%")
+    print(f"  description: {withdrawal_config['description']}")
+    print("="*80)
     
     # 6. Preprocess life events
+    print("-----")
+    print("step 7: life events preprocessing")
     if events is None:
         events_data = preprocess_life_events(basic_info)
     else:
         # Use provided events
         events_data = events
+        print(f"\n[PROCESSING]")
+        print(f"  Using provided events list: {len(events_data)} events")
     
     events_by_year = categorize_events_by_year(events_data)
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  Total events processed: {len(events_data)}")
+    print(f"  Events by year: {len(events_by_year)} years with events")
+    print("="*80)
     
     # 7. Prepare account data
+    print("-----")
+    print("step 8: account data preparation")
     account_data = prepare_account_data(accounts)
     
     # 8. Calculate base income needs (inflation adjusted)
-    yearly_income_goal = float(basic_info.yearly_income_for_ideal_lifestyle) / 100 if basic_info.yearly_income_for_ideal_lifestyle else 0.0
+    print("-----")
+    print("step 9: retirement income needs calculation")
+    yearly_income_goal_cents = float(basic_info.yearly_income_for_ideal_lifestyle) if basic_info.yearly_income_for_ideal_lifestyle else 0.0
+    yearly_income_goal = yearly_income_goal_cents / 100
+    
+    print(f"\n[INPUT DATA]")
+    print(f"  yearly_income_for_ideal_lifestyle (cents): {yearly_income_goal_cents:,.2f}")
+    print(f"  yearly_income_goal (dollars): ${yearly_income_goal:,.2f}")
+    print(f"  inflation_rate: {inflation_data['annual_rate'] * 100:.2f}%")
+    print(f"  years_to_retirement: {years_to_retirement}")
+    print(f"  years_in_retirement: {years_in_retirement}")
     
     # Calculate income needs for each retirement year
+    print(f"\n[PROCESSING]")
+    print(f"  Calculating inflated income needs for each retirement year:")
+    print(f"  Formula: Base Income × (1 + inflation_rate)^(years_to_retirement + year)")
     retirement_income_needs = {}
-    for year in range(years_in_retirement + 1):
+    for year in range(min(years_in_retirement + 1, 10)):  # Print first 10 years
+        total_years = years_to_retirement + year
         inflated_amount = apply_inflation_to_amount(
             yearly_income_goal,
             inflation_data['annual_rate'],
-            years_to_retirement + year
+            total_years
+        )
+        retirement_income_needs[year] = inflated_amount
+    # Calculate remaining years silently
+    for year in range(10, years_in_retirement + 1):
+        total_years = years_to_retirement + year
+        inflated_amount = apply_inflation_to_amount(
+            yearly_income_goal,
+            inflation_data['annual_rate'],
+            total_years
         )
         retirement_income_needs[year] = inflated_amount
     
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  Calculated income needs for {len(retirement_income_needs)} retirement years")
+    if len(retirement_income_needs) > 0:
+        print(f"  Year 0 (first retirement year): ${retirement_income_needs[0]:,.2f}")
+        if len(retirement_income_needs) > 1:
+            print(f"  Year {len(retirement_income_needs) - 1} (last retirement year): ${retirement_income_needs[len(retirement_income_needs) - 1]:,.2f}")
+    print("="*80)
+    
     # 9. Compile all data
+    print("-----")
+    print("step 10: compiling preprocessed data")
+    print(f"\n[COMPILING]")
+    print(f"  Combining all processed data into final structure...")
+    
     preprocessed_data = {
         # Time and age data
         'current_age': basic_info.current_age,
@@ -730,7 +1313,35 @@ def preprocess_retirement_plan(
     }
     
     # Add summary statistics
+    print(f"\n  Generating summary statistics...")
     preprocessed_data['summary'] = generate_preprocessing_summary(preprocessed_data)
+    
+    print(f"\n[FINAL PREPROCESSED DATA SUMMARY]")
+    print(f"  Time Periods:")
+    print(f"    Current age: {preprocessed_data['current_age']}")
+    print(f"    Retirement age: {preprocessed_data['retirement_age']}")
+    print(f"    Years to retirement: {preprocessed_data['years_to_retirement']}")
+    print(f"    Years in retirement: {preprocessed_data['years_in_retirement']}")
+    print(f"  Government Benefits:")
+    print(f"    CPP (adjusted): ${preprocessed_data['cpp_adjusted']:,.2f}/year")
+    print(f"    OAS (adjusted): ${preprocessed_data['oas_adjusted']:,.2f}/year")
+    print(f"    Pension: ${preprocessed_data['pension_amount']:,.2f}/year")
+    print(f"  Assumptions:")
+    print(f"    Inflation rate: {preprocessed_data['inflation_rate'] * 100:.2f}%")
+    print(f"    Accumulation return: {preprocessed_data['accumulation_returns']['weighted_return'] * 100:.2f}%")
+    print(f"    Retirement return: {preprocessed_data['return_after_retirement'] * 100:.2f}%")
+    print(f"  Accounts:")
+    print(f"    Total balance: ${preprocessed_data['account_data']['total_balance']:,.2f}")
+    print(f"    Total annual contributions: ${preprocessed_data['account_data']['total_annual_contribution']:,.2f}")
+    print(f"  Income Goals:")
+    print(f"    Base income goal: ${preprocessed_data['yearly_income_goal']:,.2f}/year")
+    print(f"    First retirement year need: ${preprocessed_data['retirement_income_needs'][0]:,.2f}/year" if preprocessed_data['retirement_income_needs'] else "    No retirement income needs calculated")
+    
+    print("\n" + "="*80)
+    print("="*80)
+    print("PREPROCESSING COMPLETE")
+    print("="*80)
+    print("="*80 + "\n")
     
     return preprocessed_data
 

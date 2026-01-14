@@ -1,12 +1,4 @@
-"""
-ORCHESTRATOR
-============
-
-This module orchestrates the entire retirement calculation process by calling
-all service modules in the correct sequence and consolidating results.
-
-The orchestrator is the main entry point for running retirement calculations.
-"""
+# file objective - runs the whole retirement calculation in the correct order - main entry point retirement calculations.
 
 from typing import Dict, Any
 from api.models import BasicInformation
