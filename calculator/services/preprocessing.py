@@ -82,58 +82,66 @@ def calculate_cpp_adjustment(basic_info: BasicInformation) -> Dict[str, Any]:
     print(f"  cpp_start_age: {basic_info.cpp_start_age}")
     print(f"  current_age: {basic_info.current_age}")
     
-    # cpp_amount_at_age is the monthly amount at age 65 (cpp_at_65)
-    cpp_at_65_monthly_cents = float(basic_info.cpp_amount_at_age) if basic_info.cpp_amount_at_age else 0.0
-    cpp_at_65_monthly = cpp_at_65_monthly_cents / 100
+    # cpp_amount_at_age is the monthly amount at the START AGE (not necessarily 65)
+    cpp_at_start_age_monthly_cents = float(basic_info.cpp_amount_at_age) if basic_info.cpp_amount_at_age else 0.0
+    cpp_at_start_age_monthly = cpp_at_start_age_monthly_cents / 100
     start_age = basic_info.cpp_start_age if basic_info.cpp_start_age else 65
     
     print(f"\n[PROCESSING]")
-    print(f"  CPP monthly amount at age 65 (cpp_at_65): ${cpp_at_65_monthly:,.2f}/month")
+    print(f"  CPP monthly amount at start age ({start_age}): ${cpp_at_start_age_monthly:,.2f}/month")
     print(f"  CPP start age: {start_age}")
     print(f"  Standard CPP age: 65")
     
     if start_age < 65:
-        # A) Early start: reduce by 0.6% per month
+        # A) Early start: user provided amount at start_age, need to calculate what it would be at 65
+        # Then reduce it to get the final amount at start_age
         months_early = (65 - start_age) * 12
         print(f"\n  [A) EARLY START CALCULATION]")
+        print(f"    User provided amount at age {start_age}: ${cpp_at_start_age_monthly:,.2f}/month")
         print(f"    monthsEarly = (65 - {start_age}) * 12 = {months_early} months")
         print(f"    Reduction per month: 0.6%")
         print(f"    Total reduction: 0.006 * {months_early} = {0.006 * months_early:.4f} = {0.006 * months_early * 100:.2f}%")
         
-        # Apply formula: cpp_final = cpp_at_65 * (1 - 0.006 * monthsEarly)
-        cpp_final_monthly = cpp_at_65_monthly * (1 - 0.006 * months_early)
+        # Calculate what it would be at 65: cpp_at_65 = cpp_at_start_age / (1 - 0.006 * monthsEarly)
+        cpp_at_65_monthly = cpp_at_start_age_monthly / (1 - 0.006 * months_early)
+        print(f"    Calculating amount at age 65: cpp_at_65 = ${cpp_at_start_age_monthly:,.2f} / (1 - {0.006 * months_early:.4f}) = ${cpp_at_65_monthly:,.2f}/month")
+        
+        # Final amount is the user-provided amount at start_age
+        cpp_final_monthly = cpp_at_start_age_monthly
         adjustment_factor = 1 - 0.006 * months_early
         adjustment_type = "early"
         
-        print(f"    cpp_final (monthly) = cpp_at_65 × (1 - 0.006 × monthsEarly)")
-        print(f"    cpp_final (monthly) = ${cpp_at_65_monthly:,.2f} × (1 - {0.006 * months_early:.4f})")
-        print(f"    cpp_final (monthly) = ${cpp_at_65_monthly:,.2f} × {adjustment_factor:.4f} = ${cpp_final_monthly:,.2f}/month")
+        print(f"    cpp_final (monthly) at age {start_age} = ${cpp_final_monthly:,.2f}/month (user-provided amount)")
         
     elif start_age > 65:
-        # B) Late start: increase by 0.7% per month
+        # B) Late start: user provided amount at start_age, need to calculate what it would be at 65
         months_late = (start_age - 65) * 12
         print(f"\n  [B) LATE START CALCULATION]")
+        print(f"    User provided amount at age {start_age}: ${cpp_at_start_age_monthly:,.2f}/month")
         print(f"    monthsLate = ({start_age} - 65) * 12 = {months_late} months")
         print(f"    Increase per month: 0.7%")
         print(f"    Total increase: 0.007 * {months_late} = {0.007 * months_late:.4f} = {0.007 * months_late * 100:.2f}%")
         
-        # Apply formula: cpp_final = cpp_at_65 * (1 + 0.007 * monthsLate)
-        cpp_final_monthly = cpp_at_65_monthly * (1 + 0.007 * months_late)
+        # Calculate what it would be at 65: cpp_at_65 = cpp_at_start_age / (1 + 0.007 * monthsLate)
+        cpp_at_65_monthly = cpp_at_start_age_monthly / (1 + 0.007 * months_late)
+        print(f"    Calculating amount at age 65: cpp_at_65 = ${cpp_at_start_age_monthly:,.2f} / (1 + {0.007 * months_late:.4f}) = ${cpp_at_65_monthly:,.2f}/month")
+        
+        # Final amount is the user-provided amount at start_age
+        cpp_final_monthly = cpp_at_start_age_monthly
         adjustment_factor = 1 + 0.007 * months_late
         adjustment_type = "late"
         
-        print(f"    cpp_final (monthly) = cpp_at_65 × (1 + 0.007 × monthsLate)")
-        print(f"    cpp_final (monthly) = ${cpp_at_65_monthly:,.2f} × (1 + {0.007 * months_late:.4f})")
-        print(f"    cpp_final (monthly) = ${cpp_at_65_monthly:,.2f} × {adjustment_factor:.4f} = ${cpp_final_monthly:,.2f}/month")
+        print(f"    cpp_final (monthly) at age {start_age} = ${cpp_final_monthly:,.2f}/month (user-provided amount)")
         
     else:
         # Start age = 65, no adjustment
         print(f"\n  [STANDARD START]")
         print(f"    Start age is 65, no adjustment needed")
-        cpp_final_monthly = cpp_at_65_monthly
+        cpp_at_65_monthly = cpp_at_start_age_monthly
+        cpp_final_monthly = cpp_at_start_age_monthly
         adjustment_factor = 1.0
         adjustment_type = "standard"
-        print(f"    cpp_final (monthly) = cpp_at_65 = ${cpp_final_monthly:,.2f}/month")
+        print(f"    cpp_final (monthly) at age 65 = ${cpp_final_monthly:,.2f}/month (user-provided amount)")
     
     # C) Convert to annual: cpp_annual = cpp_final * 12
     cpp_annual = cpp_final_monthly * 12
@@ -157,8 +165,8 @@ def calculate_cpp_adjustment(basic_info: BasicInformation) -> Dict[str, Any]:
     
     result = {
         'base_amount': cpp_annual,  # Store annual amount
-        'base_monthly': cpp_at_65_monthly,  # Store original monthly at 65
-        'final_monthly': cpp_final_monthly,  # Store adjusted monthly
+        'base_monthly': cpp_at_65_monthly,  # Store calculated monthly at 65 (for reference)
+        'final_monthly': cpp_final_monthly,  # Store user-provided monthly at start_age
         'start_age': start_age,
         'adjusted_amount': cpp_annual,  # Annual adjusted amount
         'adjustment_factor': adjustment_factor,
@@ -169,8 +177,8 @@ def calculate_cpp_adjustment(basic_info: BasicInformation) -> Dict[str, Any]:
     
     print(f"\n[OUTPUT RESULTS]")
     print(f"  base_amount (annual): ${result['base_amount']:,.2f}/year")
-    print(f"  base_monthly (at 65): ${result['base_monthly']:,.2f}/month")
-    print(f"  final_monthly (adjusted): ${result['final_monthly']:,.2f}/month")
+    print(f"  base_monthly (calculated at 65): ${result['base_monthly']:,.2f}/month")
+    print(f"  final_monthly (at start age {start_age}): ${result['final_monthly']:,.2f}/month")
     print(f"  start_age: {result['start_age']} years old")
     print(f"  adjusted_amount (annual): ${result['adjusted_amount']:,.2f}/year")
     print(f"  adjustment_factor: {result['adjustment_factor']:.4f}")
@@ -207,43 +215,47 @@ def calculate_oas_adjustment(basic_info: BasicInformation) -> Dict[str, Any]:
     print(f"  oas_start_age: {basic_info.oas_start_age}")
     print(f"  current_age: {basic_info.current_age}")
     
-    # oas_amount_at_OAS_age is the monthly amount at age 65 (oas_at_65)
-    oas_at_65_monthly_cents = float(basic_info.oas_amount_at_OAS_age) if basic_info.oas_amount_at_OAS_age else 0.0
-    oas_at_65_monthly = oas_at_65_monthly_cents / 100
+    # oas_amount_at_OAS_age is the monthly amount at the START AGE (not necessarily 65)
+    oas_at_start_age_monthly_cents = float(basic_info.oas_amount_at_OAS_age) if basic_info.oas_amount_at_OAS_age else 0.0
+    oas_at_start_age_monthly = oas_at_start_age_monthly_cents / 100
     requested_start_age = basic_info.oas_start_age if basic_info.oas_start_age else 65
     start_age = max(requested_start_age, 65)  # Cannot start before 65
     
     print(f"\n[PROCESSING]")
-    print(f"  OAS monthly amount at age 65 (oas_at_65): ${oas_at_65_monthly:,.2f}/month")
+    print(f"  OAS monthly amount at start age ({start_age}): ${oas_at_start_age_monthly:,.2f}/month")
     print(f"  Requested OAS start age: {requested_start_age}")
     print(f"  Adjusted start age (cannot be < 65): {start_age}")
     print(f"  Standard OAS age: 65")
     
     if start_age > 65:
-        # A) Late start: increase by 0.6% per month
+        # A) Late start: user provided amount at start_age, need to calculate what it would be at 65
         months_late = (start_age - 65) * 12
         print(f"\n  [A) LATE START CALCULATION]")
+        print(f"    User provided amount at age {start_age}: ${oas_at_start_age_monthly:,.2f}/month")
         print(f"    monthsLate = ({start_age} - 65) * 12 = {months_late} months")
         print(f"    Increase per month: 0.6%")
         print(f"    Total increase: 0.006 * {months_late} = {0.006 * months_late:.4f} = {0.006 * months_late * 100:.2f}%")
         
-        # Apply formula: oas_final = oas_at_65 * (1 + 0.006 * monthsLate)
-        oas_final_monthly = oas_at_65_monthly * (1 + 0.006 * months_late)
+        # Calculate what it would be at 65: oas_at_65 = oas_at_start_age / (1 + 0.006 * monthsLate)
+        oas_at_65_monthly = oas_at_start_age_monthly / (1 + 0.006 * months_late)
+        print(f"    Calculating amount at age 65: oas_at_65 = ${oas_at_start_age_monthly:,.2f} / (1 + {0.006 * months_late:.4f}) = ${oas_at_65_monthly:,.2f}/month")
+        
+        # Final amount is the user-provided amount at start_age
+        oas_final_monthly = oas_at_start_age_monthly
         adjustment_factor = 1 + 0.006 * months_late
         adjustment_type = "late"
         
-        print(f"    oas_final (monthly) = oas_at_65 × (1 + 0.006 × monthsLate)")
-        print(f"    oas_final (monthly) = ${oas_at_65_monthly:,.2f} × (1 + {0.006 * months_late:.4f})")
-        print(f"    oas_final (monthly) = ${oas_at_65_monthly:,.2f} × {adjustment_factor:.4f} = ${oas_final_monthly:,.2f}/month")
+        print(f"    oas_final (monthly) at age {start_age} = ${oas_final_monthly:,.2f}/month (user-provided amount)")
         
     else:
         # B) Start age = 65, no adjustment
         print(f"\n  [B) STANDARD START]")
         print(f"    Start age is 65, no adjustment needed")
-        oas_final_monthly = oas_at_65_monthly
+        oas_at_65_monthly = oas_at_start_age_monthly
+        oas_final_monthly = oas_at_start_age_monthly
         adjustment_factor = 1.0
         adjustment_type = "standard"
-        print(f"    oas_final (monthly) = oas_at_65 = ${oas_final_monthly:,.2f}/month")
+        print(f"    oas_final (monthly) at age 65 = ${oas_final_monthly:,.2f}/month (user-provided amount)")
     
     # Convert to annual: oas_annual = oas_final * 12
     oas_annual = oas_final_monthly * 12
@@ -267,8 +279,8 @@ def calculate_oas_adjustment(basic_info: BasicInformation) -> Dict[str, Any]:
     
     result = {
         'base_amount': oas_annual,  # Store annual amount
-        'base_monthly': oas_at_65_monthly,  # Store original monthly at 65
-        'final_monthly': oas_final_monthly,  # Store adjusted monthly
+        'base_monthly': oas_at_65_monthly,  # Store calculated monthly at 65 (for reference)
+        'final_monthly': oas_final_monthly,  # Store user-provided monthly at start_age
         'start_age': start_age,
         'adjusted_amount': oas_annual,  # Annual adjusted amount
         'adjustment_factor': adjustment_factor,
@@ -279,8 +291,8 @@ def calculate_oas_adjustment(basic_info: BasicInformation) -> Dict[str, Any]:
     
     print(f"\n[OUTPUT RESULTS]")
     print(f"  base_amount (annual): ${result['base_amount']:,.2f}/year")
-    print(f"  base_monthly (at 65): ${result['base_monthly']:,.2f}/month")
-    print(f"  final_monthly (adjusted): ${result['final_monthly']:,.2f}/month")
+    print(f"  base_monthly (calculated at 65): ${result['base_monthly']:,.2f}/month")
+    print(f"  final_monthly (at start age {start_age}): ${result['final_monthly']:,.2f}/month")
     print(f"  start_age: {result['start_age']} years old")
     print(f"  adjusted_amount (annual): ${result['adjusted_amount']:,.2f}/year")
     print(f"  adjustment_factor: {result['adjustment_factor']:.4f}")
@@ -368,13 +380,14 @@ def calculate_pension_with_indexing(basic_info: BasicInformation) -> Dict[str, A
     print(f"    - if age == pension_start_age: pension_annual[age] = pension_base_annual")
     print(f"    - if age > pension_start_age: pension_annual[age] = pension_base_annual × (1 + rate)^years_since_start")
     
-    # Calculate indexed amounts by age (from current age to 30 years into retirement)
+    # Calculate indexed amounts by age (from current age to plan_until_age)
     current_age = basic_info.current_age
     plan_until_age = basic_info.plan_until_age if basic_info.plan_until_age else 90
     indexed_amounts = {}  # Keyed by age
     
     print(f"\n  [CALCULATIONS BY AGE]")
-    for age in range(current_age, min(plan_until_age + 1, current_age + 50)):  # Up to 50 years ahead
+    print(f"  Calculating pension amounts from age {current_age} to age {plan_until_age}")
+    for age in range(current_age, plan_until_age + 1):  # Calculate through plan_until_age
         if age < start_age:
             # Rule: if age < pension_start_age: pension_annual[age] = 0
             pension_annual = 0.0
@@ -435,7 +448,7 @@ def calculate_pension_with_indexing(basic_info: BasicInformation) -> Dict[str, A
     print(f"  base_amount (pension_base_annual): ${result['base_amount']:,.2f}/year")
     print(f"  indexing_rate: {result['indexing_rate'] * 100:.2f}%")
     print(f"  start_age: {result['start_age']} years old")
-    print(f"  start_year: {result['start_year']} years from now (NOT a calendar year)")
+    print(f"  start_year: {result['start_year']} years from now")
     print(f"  start_calendar_year: {result['start_calendar_year']} (actual calendar year)")
     print(f"  indexed_amounts (by year offset): {len(result['indexed_amounts'])} years calculated")
     print(f"  indexed_amounts_by_age: {len(result['indexed_amounts_by_age'])} ages calculated")
