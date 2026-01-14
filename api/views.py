@@ -353,12 +353,11 @@ def get_projection(request, client_id):
         )
 
 
-@api_view(['GET', 'POST'])
+@api_view(['POST'])
 def get_monte_carlo(request, client_id):
     """
-    Get or run Monte Carlo analysis data for the Monte Carlo dashboard.
+    Run Monte Carlo analysis with custom configuration for the Monte Carlo dashboard.
     
-    GET /api/monte-carlo/<client_id>/ - Returns existing Monte Carlo results
     POST /api/monte-carlo/<client_id>/ - Runs new simulation with custom configuration
     
     POST Body Parameters:
@@ -391,92 +390,72 @@ def get_monte_carlo(request, client_id):
         
         yearly_breakdown = projection.yearly_breakdown if projection.yearly_breakdown else []
         
-        # Initialize variables for both POST and GET
-        monte_carlo_data = {}
-        monte_carlo_results = None
-        accounts = basic_info.investment_accounts.all()  # Define accounts for both POST and GET
+        # Get accounts for insights section
+        accounts = basic_info.investment_accounts.all()
         
-        # If POST, run new simulation with custom parameters
-        if request.method == 'POST':
-            # Validate configuration using serializer
-            config_serializer = MonteCarloConfigurationSerializer(data=request.data)
-            if not config_serializer.is_valid():
-                return Response(
-                    config_serializer.errors,
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Extract validated configuration
-            validated_data = config_serializer.validated_data
-            num_simulations = validated_data['num_simulations']
-            market_volatility = validated_data['market_volatility']
-            expected_annual_return = validated_data['expected_annual_return'] / 100  # Convert to decimal
-            standard_deviation = validated_data['standard_deviation'] / 100  # Convert to decimal
-            inflation_rate = validated_data['inflation_rate'] / 100  # Convert to decimal
-            sequence_of_returns_risk = validated_data['sequence_of_returns_risk']
-            
-            # Store original percentage values for response
-            expected_annual_return_percent = validated_data['expected_annual_return']
-            standard_deviation_percent = validated_data['standard_deviation']
-            inflation_rate_percent = validated_data['inflation_rate']
-            
-            # Split yearly breakdown into accumulation and withdrawal phases
-            accumulation_breakdown = []
-            withdrawal_breakdown = []
-            
-            for year_data in yearly_breakdown:
-                if year_data.get('phase') == 'accumulation':
-                    accumulation_breakdown.append(year_data)
-                elif year_data.get('phase') == 'retirement':
-                    withdrawal_breakdown.append(year_data)
-            
-            years_to_retirement = len(accumulation_breakdown)
-            years_in_retirement = len(withdrawal_breakdown)
-            
-            # Run enhanced Monte Carlo simulation with time series
-            from calculator.services.monte_carlo_enhanced import run_monte_carlo_with_time_series
-            
-            monte_carlo_results = run_monte_carlo_with_time_series(
-                accumulation_breakdown=accumulation_breakdown,
-                withdrawal_breakdown=withdrawal_breakdown,
-                years_to_retirement=years_to_retirement,
-                years_in_retirement=years_in_retirement,
-                expected_return=expected_annual_return,
-                return_volatility=standard_deviation,
-                num_simulations=num_simulations
+        # Validate configuration using serializer
+        config_serializer = MonteCarloConfigurationSerializer(data=request.data)
+        if not config_serializer.is_valid():
+            return Response(
+                config_serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
             )
-            
-            # Update projection with new Monte Carlo data
-            projection.monte_carlo_data = monte_carlo_results
-            projection.success_probability = Decimal(str(round(monte_carlo_results.get('success_probability', 0.0), 1)))
-            projection.percentile_10 = Decimal(str(round(monte_carlo_results.get('percentile_10', 0.0), 2))) if monte_carlo_results.get('percentile_10') is not None else None
-            projection.percentile_25 = Decimal(str(round(monte_carlo_results.get('percentile_25', 0.0), 2))) if monte_carlo_results.get('percentile_25') is not None else None
-            projection.percentile_50 = Decimal(str(round(monte_carlo_results.get('percentile_50', 0.0), 2))) if monte_carlo_results.get('percentile_50') is not None else None
-            projection.percentile_75 = Decimal(str(round(monte_carlo_results.get('percentile_75', 0.0), 2))) if monte_carlo_results.get('percentile_75') is not None else None
-            projection.percentile_90 = Decimal(str(round(monte_carlo_results.get('percentile_90', 0.0), 2))) if monte_carlo_results.get('percentile_90') is not None else None
-            projection.save()
-            
-            # Use newly calculated results
-            monte_carlo_data = monte_carlo_results
-        else:
-            # GET request - use existing Monte Carlo data
-            monte_carlo_data = projection.monte_carlo_data if projection.monte_carlo_data else {}
-            
-            # GET request - use defaults or from projection
-            num_simulations = 1000
-            market_volatility = 'historical'
-            total_balance = sum(float(acc.balance) / 100 for acc in accounts)
-            weighted_return = 0.05
-            if total_balance > 0:
-                from calculator.services.preprocessing import get_account_return_profile
-                weighted_return = sum(
-                    (float(acc.balance) / 100) * get_account_return_profile(acc)['expected_return']
-                    for acc in accounts
-                ) / total_balance
-            expected_annual_return_percent = weighted_return * 100
-            standard_deviation_percent = 15.0
-            inflation_rate_percent = float(basic_info.inflation_rate) if basic_info.inflation_rate else 2.5
-            sequence_of_returns_risk = 'enabled'
+        
+        # Extract validated configuration
+        validated_data = config_serializer.validated_data
+        num_simulations = validated_data['num_simulations']
+        market_volatility = validated_data['market_volatility']
+        expected_annual_return = validated_data['expected_annual_return'] / 100  # Convert to decimal
+        standard_deviation = validated_data['standard_deviation'] / 100  # Convert to decimal
+        inflation_rate = validated_data['inflation_rate'] / 100  # Convert to decimal
+        sequence_of_returns_risk = validated_data['sequence_of_returns_risk']
+        
+        # Store original percentage values for response
+        expected_annual_return_percent = validated_data['expected_annual_return']
+        standard_deviation_percent = validated_data['standard_deviation']
+        inflation_rate_percent = validated_data['inflation_rate']
+        
+        # Calculate weighted_return for insights (convert from percentage to decimal)
+        weighted_return = expected_annual_return
+        
+        # Split yearly breakdown into accumulation and withdrawal phases
+        accumulation_breakdown = []
+        withdrawal_breakdown = []
+        
+        for year_data in yearly_breakdown:
+            if year_data.get('phase') == 'accumulation':
+                accumulation_breakdown.append(year_data)
+            elif year_data.get('phase') == 'retirement':
+                withdrawal_breakdown.append(year_data)
+        
+        years_to_retirement = len(accumulation_breakdown)
+        years_in_retirement = len(withdrawal_breakdown)
+        
+        # Run enhanced Monte Carlo simulation with time series
+        from calculator.services.monte_carlo_enhanced import run_monte_carlo_with_time_series
+        
+        monte_carlo_results = run_monte_carlo_with_time_series(
+            accumulation_breakdown=accumulation_breakdown,
+            withdrawal_breakdown=withdrawal_breakdown,
+            years_to_retirement=years_to_retirement,
+            years_in_retirement=years_in_retirement,
+            expected_return=expected_annual_return,
+            return_volatility=standard_deviation,
+            num_simulations=num_simulations
+        )
+        
+        # Update projection with new Monte Carlo data
+        projection.monte_carlo_data = monte_carlo_results
+        projection.success_probability = Decimal(str(round(monte_carlo_results.get('success_probability', 0.0), 1)))
+        projection.percentile_10 = Decimal(str(round(monte_carlo_results.get('percentile_10', 0.0), 2))) if monte_carlo_results.get('percentile_10') is not None else None
+        projection.percentile_25 = Decimal(str(round(monte_carlo_results.get('percentile_25', 0.0), 2))) if monte_carlo_results.get('percentile_25') is not None else None
+        projection.percentile_50 = Decimal(str(round(monte_carlo_results.get('percentile_50', 0.0), 2))) if monte_carlo_results.get('percentile_50') is not None else None
+        projection.percentile_75 = Decimal(str(round(monte_carlo_results.get('percentile_75', 0.0), 2))) if monte_carlo_results.get('percentile_75') is not None else None
+        projection.percentile_90 = Decimal(str(round(monte_carlo_results.get('percentile_90', 0.0), 2))) if monte_carlo_results.get('percentile_90') is not None else None
+        projection.save()
+        
+        # Use newly calculated results
+        monte_carlo_data = monte_carlo_results
         
         # Get time series data from monte_carlo_data
         time_series = monte_carlo_data.get('time_series', {})
