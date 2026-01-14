@@ -116,8 +116,9 @@ def simulate_withdrawal_year(
     # Government benefits start at specified ages
     cpp_start_age = basic_info.cpp_start_age if basic_info.cpp_start_age else 65
     oas_start_age = basic_info.oas_start_age if basic_info.oas_start_age else 65
-    pension_start_age = basic_info.has_work_pension.pension_start_age if basic_info.has_work_pension and basic_info.has_work_pension.pension_start_age else 65
-    has_pension = basic_info.has_work_pension and basic_info.has_work_pension.has_pension if basic_info.has_work_pension else False
+    work_pension = basic_info.work_pensions.first()  # Get first work pension (supports multiple now)
+    pension_start_age = work_pension.pension_start_age if work_pension and work_pension.pension_start_age else 65
+    has_pension = work_pension and work_pension.has_pension if work_pension else False
     
     cpp_income = cpp_adjusted if age >= cpp_start_age else 0.0
     oas_income = oas_adjusted if age >= oas_start_age else 0.0

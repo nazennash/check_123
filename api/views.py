@@ -3,7 +3,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from decimal import Decimal
 from .serializers import BasicInformationSerializer, MonteCarloConfigurationSerializer
-from .models import BasicInformation
+from .models import BasicInformation, WorkPension
 from calculator.services.orchestrator import run_retirement_calculation
 from calculator.models import Projection
 
@@ -46,18 +46,37 @@ def get_basic_information(request, client_id):
 @api_view(['DELETE'])
 def delete_basic_information(request, client_id):
     try:
+        # Get basic_info
         basic_info = BasicInformation.objects.get(client_id=client_id)
         
-        if basic_info.has_work_pension:
-            basic_info.has_work_pension.delete()
+        # Delete all related data in proper order
+        # 1. Delete work pensions (ForeignKey relationship - now supports multiple)
+        work_pensions_count = basic_info.work_pensions.count()
+        basic_info.work_pensions.all().delete()
+        print(f"Deleted {work_pensions_count} work pension(s) for client_id {client_id}")
         
+        # 2. Delete investment accounts (ForeignKey relationship)
+        investment_accounts_count = basic_info.investment_accounts.count()
         basic_info.investment_accounts.all().delete()
-        basic_info.life_events.all().delete()
+        print(f"Deleted {investment_accounts_count} investment account(s) for client_id {client_id}")
         
+        # 3. Delete life events (ForeignKey relationship)
+        life_events_count = basic_info.life_events.count()
+        basic_info.life_events.all().delete()
+        print(f"Deleted {life_events_count} life event(s) for client_id {client_id}")
+        
+        # 4. Delete projections (if any exist - from calculator app)
+        projections_count = basic_info.projections.count()
+        basic_info.projections.all().delete()
+        print(f"Deleted {projections_count} projection(s) for client_id {client_id}")
+        
+        # 5. Finally, delete the basic information record
+        # This will cascade delete the work pension if the relationship is properly set
         basic_info.delete()
+        print(f"Deleted basic information for client_id {client_id}")
         
         return Response(
-            {'message': f'Basic information with client_id {client_id} and all related data (work pension, investment accounts, life events) has been deleted successfully.'},
+            {'message': f'Basic information with client_id {client_id} and all related data (work pension, investment accounts, life events, projections) has been deleted successfully.'},
             status=status.HTTP_200_OK
         )
     except BasicInformation.DoesNotExist:

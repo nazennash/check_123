@@ -1,15 +1,6 @@
 from django.db import models
 
 
-class WorkPension(models.Model):
-    has_pension = models.BooleanField(null=True, blank=True)
-    monthly_pension_amount = models.BigIntegerField(null=True, blank=True)
-    pension_start_age = models.IntegerField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'work_pension'
-
-
 class BasicInformation(models.Model):
     user_id = models.AutoField(primary_key=True)
     client_id = models.IntegerField(unique=True)
@@ -23,7 +14,6 @@ class BasicInformation(models.Model):
     cpp_amount_at_age = models.BigIntegerField(null=True, blank=True)
     oas_start_age = models.IntegerField(null=True, blank=True)
     oas_amount_at_OAS_age = models.BigIntegerField(null=True, blank=True)
-    has_work_pension = models.OneToOneField(WorkPension, on_delete=models.CASCADE, null=True, blank=True)
     withdrawal_strategy = models.CharField(max_length=255, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -71,3 +61,15 @@ class LifeEvent(models.Model):
 
     class Meta:
         db_table = 'life_event'
+
+
+class WorkPension(models.Model):
+    basic_information = models.ForeignKey(BasicInformation, on_delete=models.CASCADE, related_name='work_pensions')
+    has_pension = models.BooleanField(null=True, blank=True)
+    monthly_pension_amount = models.BigIntegerField(null=True, blank=True)
+    pension_start_age = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'work_pension'

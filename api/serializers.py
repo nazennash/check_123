@@ -179,8 +179,21 @@ class LifeEventSerializer(serializers.ModelSerializer):
 
 
 class BasicInformationSerializer(serializers.ModelSerializer):
-    has_work_pension = WorkPensionSerializer(required=False, allow_null=True)
+    has_work_pension = serializers.SerializerMethodField()  # Backward compatibility - returns first work pension
+    work_pensions = WorkPensionSerializer(many=True, required=False)  # New: supports multiple (writable)
     investment_accounts = InvestmentAccountSerializer(many=True, required=False)
+    
+    def get_has_work_pension(self, obj):
+        """Return first work pension for backward compatibility"""
+        work_pension = obj.work_pensions.first()
+        if work_pension:
+            serializer = WorkPensionSerializer(work_pension)
+            data = serializer.data
+            # Convert monthly_pension_amount from cents to dollars
+            if work_pension.monthly_pension_amount is not None:
+                data['monthly_pension_amount'] = float(work_pension.monthly_pension_amount) / 100
+            return data
+        return None
     yearly_income_for_ideal_lifestyle = serializers.DecimalField(max_digits=20, decimal_places=2, required=False, allow_null=True)
     cpp_amount_at_age = serializers.DecimalField(max_digits=20, decimal_places=2, required=False, allow_null=True)
     oas_amount_at_OAS_age = serializers.DecimalField(max_digits=20, decimal_places=2, required=False, allow_null=True)
@@ -201,13 +214,34 @@ class BasicInformationSerializer(serializers.ModelSerializer):
             'oas_start_age',
             'oas_amount_at_OAS_age',
             'has_work_pension',
+            'work_pensions',
             'withdrawal_strategy',
             'investment_accounts'
         ]
         read_only_fields = ['user_id']
 
     def to_internal_value(self, data):
+        # Handle has_work_pension input for backward compatibility
+        # Convert it to work_pensions format internally
+        if 'has_work_pension' in data and data['has_work_pension'] is not None:
+            # If work_pensions is not provided, use has_work_pension as the first entry
+            if 'work_pensions' not in data or not data.get('work_pensions'):
+                data['work_pensions'] = [data['has_work_pension']]
+        
         ret = super().to_internal_value(data)
+        
+        # Handle work_pensions validation
+        if 'work_pensions' in ret:
+            validated_work_pensions = []
+            for wp_data in ret['work_pensions']:
+                wp_serializer = WorkPensionSerializer(data=wp_data)
+                if wp_serializer.is_valid():
+                    validated_work_pensions.append(wp_serializer.validated_data)
+                else:
+                    raise serializers.ValidationError({
+                        'work_pensions': wp_serializer.errors
+                    })
+            ret['work_pensions'] = validated_work_pensions
         current_age = ret.get('current_age')
         
         if 'life_events' in data and current_age is not None:
@@ -346,7 +380,13 @@ class BasicInformationSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        # Handle work_pensions (new format) or has_work_pension (backward compatibility)
+        work_pensions_data = validated_data.pop('work_pensions', [])
+        # Also check for has_work_pension for backward compatibility
         has_work_pension_data = validated_data.pop('has_work_pension', None)
+        if has_work_pension_data and not work_pensions_data:
+            work_pensions_data = [has_work_pension_data]
+        
         investment_accounts_data = validated_data.pop('investment_accounts', [])
         life_events_data = validated_data.pop('life_events', [])
         
@@ -364,13 +404,13 @@ class BasicInformationSerializer(serializers.ModelSerializer):
         
         basic_info = BasicInformation.objects.create(**validated_data)
         
-        if has_work_pension_data:
-            monthly_pension = has_work_pension_data.get('monthly_pension_amount')
+        # Create work pensions (supports multiple now)
+        for work_pension_data in work_pensions_data:
+            monthly_pension = work_pension_data.get('monthly_pension_amount')
             if monthly_pension is not None:
-                has_work_pension_data['monthly_pension_amount'] = int(float(monthly_pension) * 100)
-            work_pension = WorkPension.objects.create(**has_work_pension_data)
-            basic_info.has_work_pension = work_pension
-            basic_info.save()
+                work_pension_data['monthly_pension_amount'] = int(float(monthly_pension) * 100)
+            # Create work pension with ForeignKey relationship
+            WorkPension.objects.create(basic_information=basic_info, **work_pension_data)
         
         for account_data in investment_accounts_data:
             balance = account_data.get('balance')
@@ -405,8 +445,17 @@ class BasicInformationSerializer(serializers.ModelSerializer):
         if instance.oas_amount_at_OAS_age is not None:
             representation['oas_amount_at_OAS_age'] = float(instance.oas_amount_at_OAS_age) / 100
         
-        if instance.has_work_pension and instance.has_work_pension.monthly_pension_amount is not None:
-            representation['has_work_pension']['monthly_pension_amount'] = float(instance.has_work_pension.monthly_pension_amount) / 100
+        # Handle work_pensions list
+        if 'work_pensions' in representation:
+            work_pensions_list = []
+            for wp in instance.work_pensions.all():
+                wp_data = WorkPensionSerializer(wp).data
+                if wp.monthly_pension_amount is not None:
+                    wp_data['monthly_pension_amount'] = float(wp.monthly_pension_amount) / 100
+                work_pensions_list.append(wp_data)
+            representation['work_pensions'] = work_pensions_list
+        
+        # has_work_pension is handled by SerializerMethodField (get_has_work_pension)
         
         investment_accounts = instance.investment_accounts.all()
         if investment_accounts:

@@ -320,15 +320,16 @@ def calculate_pension_with_indexing(basic_info: BasicInformation) -> Dict[str, A
     
     # INPUT DATA
     print("\n[INPUT DATA]")
-    print(f"  has_work_pension: {basic_info.has_work_pension is not None}")
-    if basic_info.has_work_pension:
-        print(f"  has_pension (flag): {basic_info.has_work_pension.has_pension}")
-        print(f"  monthly_pension_amount (cents): {basic_info.has_work_pension.monthly_pension_amount}")
-        print(f"  pension_start_age: {basic_info.has_work_pension.pension_start_age}")
+    work_pension = basic_info.work_pensions.first()  # Get first work pension (supports multiple now)
+    print(f"  work_pensions count: {basic_info.work_pensions.count()}")
+    if work_pension:
+        print(f"  has_pension (flag): {work_pension.has_pension}")
+        print(f"  monthly_pension_amount (cents): {work_pension.monthly_pension_amount}")
+        print(f"  pension_start_age: {work_pension.pension_start_age}")
     print(f"  current_age: {basic_info.current_age}")
     print(f"  Default indexing rate: {DEFAULT_PENSION_INDEXING_RATE * 100:.2f}%")
     
-    if not basic_info.has_work_pension or not basic_info.has_work_pension.has_pension:
+    if not work_pension or not work_pension.has_pension:
         print(f"\n[PROCESSING]")
         print(f"  No pension data available, returning zeros")
         result = {
@@ -343,7 +344,7 @@ def calculate_pension_with_indexing(basic_info: BasicInformation) -> Dict[str, A
         print("-"*8)
         return result
     
-    pension = basic_info.has_work_pension
+    pension = work_pension  # Use the work_pension we already retrieved
     monthly_amount_cents = float(pension.monthly_pension_amount) if pension.monthly_pension_amount else 0.0
     monthly_amount_dollars = monthly_amount_cents / 100
     indexing_rate = DEFAULT_PENSION_INDEXING_RATE
