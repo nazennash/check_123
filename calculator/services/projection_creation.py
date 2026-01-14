@@ -156,15 +156,25 @@ def create_or_update_projection(
         2. Get existing projection (if any)
         3. Update existing or create new
     """
+    print(f"\n[PROCESSING]")
+    print(f"  Force recalculate: {force_recalculate}")
+    
     # Delete old projections if forcing recalculate
     if force_recalculate:
+        old_count = basic_info.projections.count()
         basic_info.projections.all().delete()
+        print(f"  Deleted {old_count} existing projection(s)")
         existing_projection = None
     else:
         existing_projection = basic_info.projections.first()
+        if existing_projection:
+            print(f"  Found existing projection: ID {existing_projection.id}")
+        else:
+            print(f"  No existing projection found")
     
     # Update existing or create new
     if existing_projection:
+        print(f"  Updating existing projection...")
         return update_projection(
             projection=existing_projection,
             basic_info=basic_info,
@@ -177,6 +187,7 @@ def create_or_update_projection(
             run_out_age=run_out_age
         )
     else:
+        print(f"  Creating new projection...")
         return create_projection(
             basic_info=basic_info,
             projected_savings=projected_savings,
@@ -203,5 +214,17 @@ def consolidate_projection_data(
     OUTPUTS:
         List[Dict] - Complete year-by-year breakdown combining both phases
     """
-    return accumulation_breakdown + withdrawal_breakdown
+    print(f"\n[PROCESSING]")
+    print(f"  Consolidating yearly breakdowns...")
+    print(f"    Accumulation years: {len(accumulation_breakdown)}")
+    print(f"    Withdrawal years: {len(withdrawal_breakdown)}")
+    
+    consolidated = accumulation_breakdown + withdrawal_breakdown
+    
+    print(f"    Total years: {len(consolidated)}")
+    if consolidated:
+        print(f"    First year: Age {consolidated[0].get('age', 'N/A')}, Phase: {consolidated[0].get('phase', 'N/A')}")
+        print(f"    Last year: Age {consolidated[-1].get('age', 'N/A')}, Phase: {consolidated[-1].get('phase', 'N/A')}")
+    
+    return consolidated
 

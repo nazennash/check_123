@@ -81,11 +81,17 @@ def simulate_withdrawal_year(
         5. Apply life events
         6. Apply growth to remaining balances
     """
+    if years_since_retirement % 5 == 0 or years_since_retirement < 3:  # Print every 5 years or early years
+        print(f"\n    [WITHDRAWAL YEAR {year} - Age {age}, Year {years_since_retirement} of retirement]")
+    
     # Record starting balances
     starting_balance = sum(account_balances.values())
     tfsa_start = account_balances.get('TFSA', 0.0)
     rrsp_start = account_balances.get('RRSP', 0.0)
     nonreg_start = account_balances.get('NON_REG', 0.0)
+    
+    if years_since_retirement % 5 == 0 or years_since_retirement < 3:
+        print(f"      Starting balances: TFSA=${tfsa_start:,.2f}, RRSP=${rrsp_start:,.2f}, NON_REG=${nonreg_start:,.2f}, Total=${starting_balance:,.2f}")
     
     # Extract preprocessed data
     cpp_adjusted = preprocessed_data['cpp_adjusted']
@@ -103,6 +109,9 @@ def simulate_withdrawal_year(
         years_since_retirement=years_since_retirement
     )
     
+    if years_since_retirement % 5 == 0 or years_since_retirement < 3:
+        print(f"      Income need (inflated): ${inflated_income_need:,.2f}")
+    
     # Step 2: Calculate Guaranteed Income for This Year
     # Government benefits start at specified ages
     cpp_start_age = basic_info.cpp_start_age if basic_info.cpp_start_age else 65
@@ -115,8 +124,14 @@ def simulate_withdrawal_year(
     pension_income = pension_amount if has_pension and age >= pension_start_age else 0.0
     total_guaranteed_income = cpp_income + oas_income + pension_income
     
+    if years_since_retirement % 5 == 0 or years_since_retirement < 3:
+        print(f"      Guaranteed income: CPP=${cpp_income:,.2f}, OAS=${oas_income:,.2f}, Pension=${pension_income:,.2f}, Total=${total_guaranteed_income:,.2f}")
+    
     # Step 3: Calculate Withdrawal Needed from Portfolio
     withdrawal_needed = max(0.0, inflated_income_need - total_guaranteed_income)
+    
+    if years_since_retirement % 5 == 0 or years_since_retirement < 3:
+        print(f"      Withdrawal needed from portfolio: ${withdrawal_needed:,.2f}")
     
     # Step 4: Apply Life Events
     life_event_impacts = calculate_life_event_impact(
@@ -124,10 +139,15 @@ def simulate_withdrawal_year(
     )
     total_life_event_impact = sum(life_event_impacts.values())
     
+    if total_life_event_impact != 0 and (years_since_retirement % 5 == 0 or years_since_retirement < 3):
+        print(f"      Life event impact: ${total_life_event_impact:,.2f}")
+    
     # Step 5: Apply Withdrawal Strategy and Life Events
     if starting_balance > 0:
         # Apply withdrawal strategy (modifies account_balances in place)
         strategy = basic_info.withdrawal_strategy.lower() if basic_info.withdrawal_strategy else 'optimized'
+        if years_since_retirement % 5 == 0 or years_since_retirement < 3:
+            print(f"      Applying withdrawal strategy: {strategy}")
         apply_withdrawal_strategy(
             strategy=strategy,
             withdrawal_needed=withdrawal_needed,
@@ -146,6 +166,9 @@ def simulate_withdrawal_year(
         nonreg_growth = account_balances.get('NON_REG', 0.0) * return_after_retirement
         portfolio_growth = tfsa_growth + rrsp_growth + nonreg_growth
         
+        if years_since_retirement % 5 == 0 or years_since_retirement < 3:
+            print(f"      Portfolio growth ({return_after_retirement*100:.2f}%): ${portfolio_growth:,.2f}")
+        
         # Add growth to balances
         account_balances['TFSA'] = account_balances.get('TFSA', 0.0) + tfsa_growth
         account_balances['RRSP'] = account_balances.get('RRSP', 0.0) + rrsp_growth
@@ -159,6 +182,9 @@ def simulate_withdrawal_year(
     tfsa_ending = account_balances.get('TFSA', 0.0)
     rrsp_ending = account_balances.get('RRSP', 0.0)
     nonreg_ending = account_balances.get('NON_REG', 0.0)
+    
+    if years_since_retirement % 5 == 0 or years_since_retirement < 3:
+        print(f"      Ending balances: TFSA=${tfsa_ending:,.2f}, RRSP=${rrsp_ending:,.2f}, NON_REG=${nonreg_ending:,.2f}, Total=${ending_balance:,.2f}")
     
     # Estimate taxes (simplified - currently returns 0)
     taxes = 0.0
@@ -217,15 +243,29 @@ def run_withdrawal_phase(
             2. Update account balances for next year
             3. Store year data in breakdown
     """
+    print("\n[INPUT DATA]")
+    retirement_age = basic_info.work_optional_age if basic_info.work_optional_age else basic_info.current_age + 30
+    print(f"  Retirement age: {retirement_age}")
+    print(f"  Years in retirement: {years_in_retirement}")
+    print(f"  Starting account balances at retirement:")
+    print(f"    TFSA: ${account_balances_at_retirement.get('TFSA', 0.0):,.2f}")
+    print(f"    RRSP: ${account_balances_at_retirement.get('RRSP', 0.0):,.2f}")
+    print(f"    NON_REG: ${account_balances_at_retirement.get('NON_REG', 0.0):,.2f}")
+    total_start = sum(account_balances_at_retirement.values())
+    print(f"    Total: ${total_start:,.2f}")
+    
     breakdown = []
     current_year = 2025  # Base year
-    retirement_age = basic_info.work_optional_age if basic_info.work_optional_age else basic_info.current_age + 30
     
     # Start with balances at retirement
     account_balances = account_balances_at_retirement.copy()
     
     # Get life events
     life_events = list(basic_info.life_events.all())
+    print(f"  Number of life events: {len(life_events)}")
+    
+    print(f"\n[PROCESSING]")
+    print(f"  Simulating {years_in_retirement} years of withdrawals...")
     
     # Simulate each year during retirement
     for year_idx in range(years_in_retirement):
@@ -252,6 +292,16 @@ def run_withdrawal_phase(
         
         breakdown.append(year_data)
     
+    print(f"\n[OUTPUT RESULTS]")
+    if breakdown:
+        final_year = breakdown[-1]
+        print(f"  Final year (age {final_year['age']}):")
+        print(f"    Ending balance: ${final_year['ending_balance']:,.2f}")
+        print(f"    TFSA ending: ${final_year['tfsa_ending']:,.2f}")
+        print(f"    RRSP ending: ${final_year['rrsp_ending']:,.2f}")
+        print(f"    NON_REG ending: ${final_year['non_reg_ending']:,.2f}")
+    print(f"  Total years simulated: {len(breakdown)}")
+    
     return breakdown
 
 
@@ -267,8 +317,16 @@ def find_run_out_age(
     OUTPUTS:
         int or None - Age when money runs out, or None if money lasts
     """
+    print(f"\n[PROCESSING]")
+    print(f"  Searching for run-out age in {len(withdrawal_breakdown)} years of withdrawal data...")
+    
     for year_data in withdrawal_breakdown:
-        if year_data.get('ending_balance', 0) <= 0:
-            return year_data.get('age')
+        ending_balance = year_data.get('ending_balance', 0)
+        age = year_data.get('age')
+        if ending_balance <= 0:
+            print(f"  Found run-out at age {age} (ending balance: ${ending_balance:,.2f})")
+            return age
+    
+    print(f"  No run-out age found - money lasts through retirement")
     return None
 

@@ -45,7 +45,22 @@ def run_monte_carlo_with_time_series(
             }
         }
     """
+    print("\n" + "="*80)
+    print("MONTE CARLO SIMULATION (ENHANCED WITH TIME SERIES)")
+    print("="*80)
+    
+    print("\n[INPUT DATA]")
+    print(f"  Years to retirement: {years_to_retirement}")
+    print(f"  Years in retirement: {years_in_retirement}")
+    print(f"  Expected return: {expected_return*100:.2f}%")
+    print(f"  Return volatility: {return_volatility*100:.2f}%")
+    print(f"  Number of simulations: {num_simulations}")
+    print(f"  Accumulation breakdown years: {len(accumulation_breakdown)}")
+    print(f"  Withdrawal breakdown years: {len(withdrawal_breakdown)}")
+    
     if not accumulation_breakdown or not withdrawal_breakdown:
+        print(f"\n[OUTPUT RESULTS]")
+        print(f"  No breakdown data - returning zeros")
         return {
             'success_probability': 0.0,
             'percentile_10': 0.0,
@@ -66,6 +81,12 @@ def run_monte_carlo_with_time_series(
     starting_balance = accumulation_breakdown[0]['starting_balance'] if accumulation_breakdown else 0.0
     retirement_balance = accumulation_breakdown[-1]['ending_balance'] if accumulation_breakdown else 0.0
     
+    print(f"\n[PROCESSING]")
+    print(f"  Starting balance: ${starting_balance:,.2f}")
+    print(f"  Retirement balance: ${retirement_balance:,.2f}")
+    print(f"  Running {num_simulations} simulations with time series tracking...")
+    print(f"  Each simulation tracks portfolio value at each age (not just final balance)")
+    
     # Get ages from breakdown
     all_ages = []
     for year_data in accumulation_breakdown:
@@ -78,7 +99,7 @@ def run_monte_carlo_with_time_series(
     ending_balances = []
     successful_scenarios = 0
     
-    for _ in range(num_simulations):
+    for sim_num in range(num_simulations):
         # Start with accumulation phase
         balance = starting_balance
         path = []
@@ -133,6 +154,12 @@ def run_monte_carlo_with_time_series(
         
         if final_balance > 0:
             successful_scenarios += 1
+        
+        if (sim_num + 1) % 1000 == 0:
+            print(f"    Completed {sim_num + 1} simulations...")
+    
+    print(f"  Simulations complete")
+    print(f"  Successful scenarios: {successful_scenarios} / {num_simulations}")
     
     # Calculate percentiles for final balances
     ending_balances.sort()
@@ -149,7 +176,20 @@ def run_monte_carlo_with_time_series(
     
     success_probability = (successful_scenarios / num_simulations) * 100
     
+    print(f"\n  Calculating percentiles for final balances...")
+    percentile_10_final = percentile(ending_balances, 0.10)
+    percentile_25_final = percentile(ending_balances, 0.25)
+    percentile_50_final = percentile(ending_balances, 0.50)
+    percentile_75_final = percentile(ending_balances, 0.75)
+    percentile_90_final = percentile(ending_balances, 0.90)
+    
+    print(f"    Success probability: {success_probability:.2f}%")
+    print(f"    10th percentile: ${percentile_10_final:,.2f}")
+    print(f"    50th percentile (median): ${percentile_50_final:,.2f}")
+    print(f"    90th percentile: ${percentile_90_final:,.2f}")
+    
     # Calculate percentile projections over time
+    print(f"\n  Calculating time series percentiles (portfolio value at each age)...")
     # Group balances by age
     age_balance_map = {}
     for path in all_simulation_paths:
@@ -176,13 +216,16 @@ def run_monte_carlo_with_time_series(
         percentile_75_series.append(percentile(balances, 0.75))
         percentile_90_series.append(percentile(balances, 0.90))
     
-    return {
+    print(f"    Calculated percentiles for {len(ages)} ages")
+    print(f"    Age range: {ages[0]} to {ages[-1]}")
+    
+    result = {
         'success_probability': round(success_probability, 2),
-        'percentile_10': round(percentile(ending_balances, 0.10), 2),
-        'percentile_25': round(percentile(ending_balances, 0.25), 2),
-        'percentile_50': round(percentile(ending_balances, 0.50), 2),
-        'percentile_75': round(percentile(ending_balances, 0.75), 2),
-        'percentile_90': round(percentile(ending_balances, 0.90), 2),
+        'percentile_10': round(percentile_10_final, 2),
+        'percentile_25': round(percentile_25_final, 2),
+        'percentile_50': round(percentile_50_final, 2),
+        'percentile_75': round(percentile_75_final, 2),
+        'percentile_90': round(percentile_90_final, 2),
         'time_series': {
             'ages': ages,
             'percentile_10': [round(b, 2) for b in percentile_10_series],
@@ -192,4 +235,16 @@ def run_monte_carlo_with_time_series(
             'percentile_90': [round(b, 2) for b in percentile_90_series]
         }
     }
+    
+    print(f"\n[OUTPUT RESULTS]")
+    print(f"  success_probability: {result['success_probability']:.2f}%")
+    print(f"  percentile_10: ${result['percentile_10']:,.2f}")
+    print(f"  percentile_25: ${result['percentile_25']:,.2f}")
+    print(f"  percentile_50: ${result['percentile_50']:,.2f}")
+    print(f"  percentile_75: ${result['percentile_75']:,.2f}")
+    print(f"  percentile_90: ${result['percentile_90']:,.2f}")
+    print(f"  time_series: {len(result['time_series']['ages'])} ages with percentile data")
+    print("="*80)
+    
+    return result
 

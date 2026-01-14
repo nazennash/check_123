@@ -1245,7 +1245,6 @@ def preprocess_retirement_plan(
         print(f"  Year 0 (first retirement year): ${retirement_income_needs[0]:,.2f}")
         if len(retirement_income_needs) > 1:
             print(f"  Year {len(retirement_income_needs) - 1} (last retirement year): ${retirement_income_needs[len(retirement_income_needs) - 1]:,.2f}")
-    print("="*80)
     
     # 9. Compile all data
     print("-----")
@@ -1337,11 +1336,9 @@ def preprocess_retirement_plan(
     print(f"    Base income goal: ${preprocessed_data['yearly_income_goal']:,.2f}/year")
     print(f"    First retirement year need: ${preprocessed_data['retirement_income_needs'][0]:,.2f}/year" if preprocessed_data['retirement_income_needs'] else "    No retirement income needs calculated")
     
-    print("\n" + "="*80)
-    print("="*80)
-    print("PREPROCESSING COMPLETE")
-    print("="*80)
-    print("="*80 + "\n")
+    print("-----")
+    print("preprocessing complete")
+    print("-----")
     
     return preprocessed_data
 

@@ -78,6 +78,11 @@ def apply_withdrawal_strategy(
     withdrawal_order = withdrawal_strategies.get(strategy.lower(), ['NON_REG', 'RRSP', 'TFSA'])
     remaining_withdrawal = withdrawal_needed
     
+    print(f"        Withdrawal strategy: {strategy}")
+    print(f"        Withdrawal order: {' → '.join(withdrawal_order)}")
+    print(f"        Withdrawal needed: ${withdrawal_needed:,.2f}")
+    print(f"        Starting balances: TFSA=${account_balances.get('TFSA', 0.0):,.2f}, RRSP=${account_balances.get('RRSP', 0.0):,.2f}, NON_REG=${account_balances.get('NON_REG', 0.0):,.2f}")
+    
     for account_type in withdrawal_order:
         if remaining_withdrawal <= 0:
             break
@@ -87,6 +92,13 @@ def apply_withdrawal_strategy(
             withdrawal_amount = min(balance, remaining_withdrawal)
             account_balances[account_type] = balance - withdrawal_amount
             remaining_withdrawal -= withdrawal_amount
+            print(f"          Withdraw ${withdrawal_amount:,.2f} from {account_type} (balance: ${balance:,.2f} → ${account_balances[account_type]:,.2f})")
+            print(f"          Remaining withdrawal: ${remaining_withdrawal:,.2f}")
+    
+    if remaining_withdrawal > 0:
+        print(f"          WARNING: Could not withdraw full amount. Remaining: ${remaining_withdrawal:,.2f}")
+    
+    print(f"        Final balances: TFSA=${account_balances.get('TFSA', 0.0):,.2f}, RRSP=${account_balances.get('RRSP', 0.0):,.2f}, NON_REG=${account_balances.get('NON_REG', 0.0):,.2f}")
 
 
 def calculate_inflated_income_need(
@@ -108,5 +120,7 @@ def calculate_inflated_income_need(
         float - Inflated income need for that retirement year
     """
     total_years = years_to_retirement + years_since_retirement
-    return yearly_income_goal * ((1 + inflation_rate) ** total_years)
+    inflated_need = yearly_income_goal * ((1 + inflation_rate) ** total_years)
+    print(f"        Inflated income need: ${yearly_income_goal:,.2f} × (1 + {inflation_rate:.4f})^{total_years} = ${inflated_need:,.2f}")
+    return inflated_need
 

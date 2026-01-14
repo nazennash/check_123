@@ -68,17 +68,26 @@ def simulate_accumulation_year(
         4. Apply investment growth based on profile returns
         5. Calculate ending balances
     """
+    if age % 5 == 0 or age < 40:  # Print every 5 years or early years
+        print(f"\n    [ACCUMULATION YEAR {year} - Age {age}]")
+    
     # Record starting balances
     starting_balance = sum(account_balances.values())
     tfsa_start = account_balances.get('TFSA', 0.0)
     rrsp_start = account_balances.get('RRSP', 0.0)
     nonreg_start = account_balances.get('NON_REG', 0.0)
     
+    if age % 5 == 0 or age < 40:
+        print(f"      Starting balances: TFSA=${tfsa_start:,.2f}, RRSP=${rrsp_start:,.2f}, NON_REG=${nonreg_start:,.2f}, Total=${starting_balance:,.2f}")
+    
     # Calculate contributions for each account
     tfsa_contrib = account_contributions.get('TFSA', 0.0)
     rrsp_contrib = account_contributions.get('RRSP', 0.0)
     nonreg_contrib = account_contributions.get('NON_REG', 0.0)
     total_contributions = tfsa_contrib + rrsp_contrib + nonreg_contrib
+    
+    if age % 5 == 0 or age < 40:
+        print(f"      Contributions: TFSA=${tfsa_contrib:,.2f}, RRSP=${rrsp_contrib:,.2f}, NON_REG=${nonreg_contrib:,.2f}, Total=${total_contributions:,.2f}")
     
     # Step 1: Apply Life Events
     # Life events can add income or subtract expenses
@@ -87,6 +96,9 @@ def simulate_accumulation_year(
         life_events, age, inflation_rate, years_since_retirement
     )
     total_life_event_impact = sum(life_event_impacts.values())
+    
+    if total_life_event_impact != 0 and (age % 5 == 0 or age < 40):
+        print(f"      Life event impact: ${total_life_event_impact:,.2f}")
     
     # Apply life event impacts to appropriate accounts
     for acc_type, impact in life_event_impacts.items():
@@ -109,6 +121,10 @@ def simulate_accumulation_year(
     nonreg_growth = account_balances.get('NON_REG', 0.0) * nonreg_return
     portfolio_growth = tfsa_growth + rrsp_growth + nonreg_growth
     
+    if age % 5 == 0 or age < 40:
+        print(f"      Returns: TFSA={tfsa_return*100:.2f}%, RRSP={rrsp_return*100:.2f}%, NON_REG={nonreg_return*100:.2f}%")
+        print(f"      Growth: TFSA=${tfsa_growth:,.2f}, RRSP=${rrsp_growth:,.2f}, NON_REG=${nonreg_growth:,.2f}, Total=${portfolio_growth:,.2f}")
+    
     # Add growth to balances
     account_balances['TFSA'] = account_balances.get('TFSA', 0.0) + tfsa_growth
     account_balances['RRSP'] = account_balances.get('RRSP', 0.0) + rrsp_growth
@@ -119,6 +135,9 @@ def simulate_accumulation_year(
     tfsa_ending = account_balances.get('TFSA', 0.0)
     rrsp_ending = account_balances.get('RRSP', 0.0)
     nonreg_ending = account_balances.get('NON_REG', 0.0)
+    
+    if age % 5 == 0 or age < 40:
+        print(f"      Ending balances: TFSA=${tfsa_ending:,.2f}, RRSP=${rrsp_ending:,.2f}, NON_REG=${nonreg_ending:,.2f}, Total=${ending_balance:,.2f}")
     
     return {
         'age': age,
@@ -174,6 +193,12 @@ def run_accumulation_phase(
             2. Update account balances for next year
             3. Store year data in breakdown
     """
+    print("\n[INPUT DATA]")
+    print(f"  Current age: {basic_info.current_age}")
+    print(f"  Years to retirement: {years_to_retirement}")
+    print(f"  Number of accounts: {len(accounts)}")
+    print(f"  Number of life events: {len(list(basic_info.life_events.all()))}")
+    
     breakdown = []
     current_year = 2025  # Base year
     
@@ -183,6 +208,23 @@ def run_accumulation_phase(
     account_contributions = account_data['account_contributions']
     account_returns = account_data['account_returns']
     inflation_rate = preprocessed_data['inflation_rate']
+    
+    print(f"\n[PROCESSING]")
+    print(f"  Starting account balances:")
+    print(f"    TFSA: ${account_balances.get('TFSA', 0.0):,.2f}")
+    print(f"    RRSP: ${account_balances.get('RRSP', 0.0):,.2f}")
+    print(f"    NON_REG: ${account_balances.get('NON_REG', 0.0):,.2f}")
+    print(f"    Total: ${sum(account_balances.values()):,.2f}")
+    print(f"  Annual contributions:")
+    print(f"    TFSA: ${account_contributions.get('TFSA', 0.0):,.2f}")
+    print(f"    RRSP: ${account_contributions.get('RRSP', 0.0):,.2f}")
+    print(f"    NON_REG: ${account_contributions.get('NON_REG', 0.0):,.2f}")
+    print(f"  Expected returns:")
+    print(f"    TFSA: {account_returns.get('TFSA', 0.05)*100:.2f}%")
+    print(f"    RRSP: {account_returns.get('RRSP', 0.05)*100:.2f}%")
+    print(f"    NON_REG: {account_returns.get('NON_REG', 0.05)*100:.2f}%")
+    print(f"  Inflation rate: {inflation_rate*100:.2f}%")
+    print(f"\n  Simulating {years_to_retirement} years of accumulation...")
     
     # Get life events
     life_events = list(basic_info.life_events.all())
@@ -210,6 +252,16 @@ def run_accumulation_phase(
         
         breakdown.append(year_data)
     
+    print(f"\n[OUTPUT RESULTS]")
+    if breakdown:
+        final_year = breakdown[-1]
+        print(f"  Final year (age {final_year['age']}):")
+        print(f"    Ending balance: ${final_year['ending_balance']:,.2f}")
+        print(f"    TFSA ending: ${final_year['tfsa_ending']:,.2f}")
+        print(f"    RRSP ending: ${final_year['rrsp_ending']:,.2f}")
+        print(f"    NON_REG ending: ${final_year['non_reg_ending']:,.2f}")
+    print(f"  Total years simulated: {len(breakdown)}")
+    
     return breakdown
 
 
@@ -231,12 +283,26 @@ def get_projected_savings_at_retirement(
         Uses starting_balance of retirement year (what you HAVE at retirement)
         Not ending_balance (which is after first year's growth and withdrawal)
     """
+    print(f"\n[PROCESSING]")
+    print(f"  Extracting projected savings at retirement...")
+    print(f"  Years to retirement: {years_to_retirement}")
+    print(f"  Breakdown length: {len(accumulation_breakdown)}")
+    
     if years_to_retirement <= 0 or not accumulation_breakdown:
+        print(f"  No accumulation data - returning $0.00")
         return 0.0
     
     # Get the last year of accumulation (the year you reach retirement age)
     retirement_year_data = accumulation_breakdown[years_to_retirement - 1]
-    return retirement_year_data['starting_balance']
+    projected_savings = retirement_year_data['starting_balance']
+    
+    print(f"  Retirement year data (index {years_to_retirement - 1}):")
+    print(f"    Age: {retirement_year_data.get('age', 'N/A')}")
+    print(f"    Starting balance: ${projected_savings:,.2f}")
+    print(f"    Ending balance: ${retirement_year_data.get('ending_balance', 0.0):,.2f}")
+    print(f"  Using starting_balance (what you HAVE at retirement): ${projected_savings:,.2f}")
+    
+    return projected_savings
 
 
 def get_account_balances_at_retirement(
@@ -254,15 +320,29 @@ def get_account_balances_at_retirement(
         Dict[str, float] - Account balances at retirement
             Format: {'TFSA': 200000.0, 'RRSP': 300000.0, 'NON_REG': 100000.0}
     """
+    print(f"\n[PROCESSING]")
+    print(f"  Extracting account balances at retirement...")
+    
     if years_to_retirement <= 0 or not accumulation_breakdown:
+        print(f"  No accumulation data - returning zeros")
         return {'TFSA': 0.0, 'RRSP': 0.0, 'NON_REG': 0.0}
     
     # Get the last year of accumulation
     retirement_year_data = accumulation_breakdown[years_to_retirement - 1]
     
+    tfsa_ending = retirement_year_data.get('tfsa_ending', 0.0)
+    rrsp_ending = retirement_year_data.get('rrsp_ending', 0.0)
+    non_reg_ending = retirement_year_data.get('non_reg_ending', 0.0)
+    
+    print(f"  Retirement year ending balances:")
+    print(f"    TFSA: ${tfsa_ending:,.2f}")
+    print(f"    RRSP: ${rrsp_ending:,.2f}")
+    print(f"    NON_REG: ${non_reg_ending:,.2f}")
+    print(f"    Total: ${tfsa_ending + rrsp_ending + non_reg_ending:,.2f}")
+    
     return {
-        'TFSA': retirement_year_data.get('tfsa_ending', 0.0),
-        'RRSP': retirement_year_data.get('rrsp_ending', 0.0),
-        'NON_REG': retirement_year_data.get('non_reg_ending', 0.0),
+        'TFSA': tfsa_ending,
+        'RRSP': rrsp_ending,
+        'NON_REG': non_reg_ending,
     }
 
