@@ -10,7 +10,8 @@ def run_monte_carlo_simulation(
     expected_return: float,
     return_volatility: float = 0.15,
     num_simulations: int = 1000,
-    include_time_series: bool = False
+    include_time_series: bool = False,
+    contributions_at_beginning: bool = True
 ) -> Dict[str, Any]:
     """
     Run Monte Carlo simulation to assess retirement plan success probability.
@@ -18,6 +19,10 @@ def run_monte_carlo_simulation(
     This function can run in two modes:
     1. Basic mode (include_time_series=False): Only tracks final balances
     2. Enhanced mode (include_time_series=True): Tracks portfolio values at each age
+    
+    TIMING ASSUMPTION:
+    - If contributions_at_beginning=True: Contributions/withdrawals happen at START of year
+    - If contributions_at_beginning=False: Contributions/withdrawals happen at END of year
     
     INPUTS:
         accumulation_breakdown: List[Dict] - Year-by-year accumulation data
@@ -28,6 +33,7 @@ def run_monte_carlo_simulation(
         return_volatility: float - Standard deviation of returns (default 15%)
         num_simulations: int - Number of Monte Carlo runs (default 1000)
         include_time_series: bool - If True, track portfolio values at each age
+        contributions_at_beginning: bool - If True, contributions/withdrawals at start of year
     
     OUTPUTS:
         Dict containing:
@@ -63,8 +69,18 @@ def run_monte_carlo_simulation(
     print(f"  Return volatility: {return_volatility*100:.2f}%")
     print(f"  Number of simulations: {num_simulations}")
     print(f"  Include time series: {include_time_series}")
+    print(f"  Timing: {'Beginning' if contributions_at_beginning else 'End'} of year")
     print(f"  Accumulation breakdown years: {len(accumulation_breakdown)}")
     print(f"  Withdrawal breakdown years: {len(withdrawal_breakdown)}")
+    
+    # Validate input lengths match year parameters
+    if len(accumulation_breakdown) != years_to_retirement:
+        print(f"  WARNING: accumulation_breakdown length ({len(accumulation_breakdown)}) "
+              f"doesn't match years_to_retirement ({years_to_retirement})")
+    
+    if len(withdrawal_breakdown) != years_in_retirement:
+        print(f"  WARNING: withdrawal_breakdown length ({len(withdrawal_breakdown)}) "
+              f"doesn't match years_in_retirement ({years_in_retirement})")
     
     if not accumulation_breakdown or not withdrawal_breakdown:
         print(f"\n[OUTPUT RESULTS]")
@@ -109,11 +125,14 @@ def run_monte_carlo_simulation(
         print(f"  Each simulation:")
         print(f"    1. Start with retirement balance")
         print(f"    2. For each withdrawal year:")
-        print(f"       - Subtract withdrawal: balance = balance - withdrawal")
-        print(f"       - Add life events: balance = balance + life_event")
-        print(f"       - Apply return: balance = balance × (1 + random_return)")
+        print(f"       - Check if bankrupt")
+        if contributions_at_beginning:
+            print(f"       - Subtract withdrawal, add life event (beginning of year)")
+            print(f"       - Apply random return to remaining balance")
+        else:
+            print(f"       - Apply random return to current balance")
+            print(f"       - Subtract withdrawal, add life event (end of year)")
         print(f"    3. Track ending balance")
-        print(f"  Note: Order matches withdrawal_engine (withdraw first, then apply return)")
     
     # Store all simulation paths (for time series) or just ending balances
     all_simulation_paths = [] if include_time_series else None
@@ -132,14 +151,19 @@ def run_monte_carlo_simulation(
                 contributions = year_data.get('total_contributions', 0.0)
                 life_event = year_data.get('life_event', 0.0)
                 
-                # Apply contributions and life events
-                balance = balance + contributions + life_event
+                # Apply contributions and life events based on timing
+                if contributions_at_beginning:
+                    balance = balance + contributions + life_event
+                    balance = max(0.0, balance)
                 
-                # Apply random return
+                # Apply random return (no artificial capping)
                 random_return = random.gauss(expected_return, return_volatility)
-                random_return = max(-0.5, min(0.5, random_return))  # Cap at -50% to +50%
                 balance = balance * (1 + random_return)
                 balance = max(0.0, balance)
+                
+                if not contributions_at_beginning:
+                    balance = balance + contributions + life_event
+                    balance = max(0.0, balance)
                 
                 path.append({
                     'age': age,
@@ -152,48 +176,61 @@ def run_monte_carlo_simulation(
                 withdrawal = year_data.get('withdrawal_needed', 0.0)
                 life_event = year_data.get('life_event', 0.0)
                 
-                # Apply withdrawal and life events
-                balance = balance - withdrawal + life_event
-                balance = max(0.0, balance)
+                # Check if bankrupt before processing this year
+                if balance <= 0:
+                    # Track bankrupt state for this age
+                    path.append({
+                        'age': age,
+                        'balance': 0.0
+                    })
+                    continue
+                
+                # Apply withdrawal and life events based on timing
+                if contributions_at_beginning:
+                    balance = balance - withdrawal + life_event
+                    balance = max(0.0, balance)
                 
                 # Apply random return
                 random_return = random.gauss(expected_return, return_volatility)
-                random_return = max(-0.5, min(0.5, random_return))  # Cap at -50% to +50%
                 balance = balance * (1 + random_return)
                 balance = max(0.0, balance)
+                
+                if not contributions_at_beginning:
+                    balance = balance - withdrawal + life_event
+                    balance = max(0.0, balance)
                 
                 path.append({
                     'age': age,
                     'balance': balance
                 })
-                
-                if balance <= 0:
-                    break
             
             all_simulation_paths.append(path)
             final_balance = path[-1]['balance'] if path else 0.0
         else:
             # Basic mode: Only simulate withdrawal phase
-            # Note: This matches the withdrawal_engine logic:
-            # 1. Withdraw first, 2. Add life events, 3. Apply return to remaining balance
             balance = retirement_balance
             
             for year_data in withdrawal_breakdown:
-                withdrawal = year_data.get('withdrawal_needed', 0.0)
-                life_event = year_data.get('life_event', 0.0)
-                
-                # Step 1: Apply withdrawal and life events (matching withdrawal_engine order)
-                balance = balance - withdrawal + life_event
-                balance = max(0.0, balance)
-                
+                # Check for bankruptcy
                 if balance <= 0:
                     break
                 
-                # Step 2: Apply random return to remaining balance
+                withdrawal = year_data.get('withdrawal_needed', 0.0)
+                life_event = year_data.get('life_event', 0.0)
+                
+                # Apply based on timing assumption
+                if contributions_at_beginning:
+                    balance = balance - withdrawal + life_event
+                    balance = max(0.0, balance)
+                
+                # Apply random return
                 random_return = random.gauss(expected_return, return_volatility)
-                random_return = max(-0.5, min(0.5, random_return))  # Cap at -50% to +50%
                 balance = balance * (1 + random_return)
                 balance = max(0.0, balance)
+                
+                if not contributions_at_beginning:
+                    balance = balance - withdrawal + life_event
+                    balance = max(0.0, balance)
             
             final_balance = balance
         
@@ -201,7 +238,7 @@ def run_monte_carlo_simulation(
         if final_balance > 0:
             successful_scenarios += 1
         
-        if (sim_num + 1) % 1000 == 0:
+        if (sim_num + 1) % 1000 == 0 and num_simulations > 1000:
             print(f"    Completed {sim_num + 1} simulations...")
     
     print(f"  Simulations complete")
@@ -214,10 +251,11 @@ def run_monte_carlo_simulation(
         """Calculate percentile using linear interpolation."""
         if not data:
             return 0.0
-        k = (len(data) - 1) * p
+        n = len(data)
+        k = (n - 1) * p
         f = int(k)
         c = k - f
-        if f + 1 < len(data):
+        if f + 1 < n:
             return data[f] + c * (data[f + 1] - data[f])
         return data[f]
     
@@ -249,18 +287,31 @@ def run_monte_carlo_simulation(
     if include_time_series:
         # Calculate percentile projections over time
         print(f"\n  Calculating time series percentiles (portfolio value at each age)...")
-        # Group balances by age
-        age_balance_map = {}
+        
+        # Find all unique ages across all paths
+        all_ages = set()
         for path in all_simulation_paths:
             for point in path:
-                age = point['age']
-                balance = point['balance']
-                if age not in age_balance_map:
-                    age_balance_map[age] = []
-                age_balance_map[age].append(balance)
+                all_ages.add(point['age'])
+        
+        ages = sorted(all_ages)
+        
+        # Initialize lists for each age
+        age_balance_map = {age: [] for age in ages}
+        
+        # Collect balances for each age
+        for path in all_simulation_paths:
+            # Create a dictionary of age->balance for this simulation
+            sim_balances = {point['age']: point['balance'] for point in path}
+            
+            # Fill in missing ages with last known balance or 0
+            last_balance = 0.0
+            for age in ages:
+                if age in sim_balances:
+                    last_balance = sim_balances[age]
+                age_balance_map[age].append(last_balance)
         
         # Calculate percentiles for each age
-        ages = sorted(age_balance_map.keys())
         percentile_10_series = []
         percentile_25_series = []
         percentile_50_series = []
@@ -303,7 +354,6 @@ def run_monte_carlo_simulation(
     return result
 
 
-# Alias for backward compatibility with API views
 def run_monte_carlo_with_time_series(
     accumulation_breakdown: List[Dict[str, Any]],
     withdrawal_breakdown: List[Dict[str, Any]],
@@ -311,7 +361,8 @@ def run_monte_carlo_with_time_series(
     years_in_retirement: int,
     expected_return: float,
     return_volatility: float = 0.15,
-    num_simulations: int = 1000
+    num_simulations: int = 1000,
+    contributions_at_beginning: bool = True
 ) -> Dict[str, Any]:
     """
     Alias for run_monte_carlo_simulation with include_time_series=True.
@@ -325,5 +376,6 @@ def run_monte_carlo_with_time_series(
         expected_return=expected_return,
         return_volatility=return_volatility,
         num_simulations=num_simulations,
-        include_time_series=True
+        include_time_series=True,
+        contributions_at_beginning=contributions_at_beginning
     )
