@@ -2,6 +2,50 @@ from rest_framework import serializers
 from .models import BasicInformation, WorkPension, InvestmentAccount, LifeEvent
 
 
+class MonteCarloConfigurationSerializer(serializers.Serializer):
+    """Serializer for Monte Carlo simulation configuration."""
+    num_simulations = serializers.IntegerField(required=True)
+    market_volatility = serializers.ChoiceField(
+        choices=['conservative', 'high_volatility', 'historical'],
+        required=True
+    )
+    expected_annual_return = serializers.FloatField(required=True)
+    standard_deviation = serializers.FloatField(required=True)
+    inflation_rate = serializers.FloatField(required=True)
+    sequence_of_returns_risk = serializers.ChoiceField(
+        choices=['enabled', 'disabled'],
+        required=True
+    )
+    
+    def validate_num_simulations(self, value):
+        if value not in [5000, 10000, 25000]:
+            raise serializers.ValidationError(
+                "num_simulations must be one of: 5000, 10000, or 25000"
+            )
+        return value
+    
+    def validate_expected_annual_return(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError(
+                "expected_annual_return must be between 0 and 100"
+            )
+        return value
+    
+    def validate_standard_deviation(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError(
+                "standard_deviation must be between 0 and 100"
+            )
+        return value
+    
+    def validate_inflation_rate(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError(
+                "inflation_rate must be between 0 and 100"
+            )
+        return value
+
+
 class WorkPensionSerializer(serializers.ModelSerializer):
     monthly_pension_amount = serializers.DecimalField(max_digits=20, decimal_places=2, required=False, allow_null=True)
 

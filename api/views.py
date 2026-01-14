@@ -1,7 +1,8 @@
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .serializers import BasicInformationSerializer
+from decimal import Decimal
+from .serializers import BasicInformationSerializer, MonteCarloConfigurationSerializer
 from .models import BasicInformation
 from calculator.services.orchestrator import run_retirement_calculation
 from calculator.models import Projection
@@ -348,5 +349,302 @@ def get_projection(request, client_id):
     except Exception as e:
         return Response(
             {'error': f'Error retrieving projection: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET', 'POST'])
+def get_monte_carlo(request, client_id):
+    """
+    Get or run Monte Carlo analysis data for the Monte Carlo dashboard.
+    
+    GET /api/monte-carlo/<client_id>/ - Returns existing Monte Carlo results
+    POST /api/monte-carlo/<client_id>/ - Runs new simulation with custom configuration
+    
+    POST Body Parameters:
+    {
+        "num_simulations": 5000 | 10000 | 25000,
+        "market_volatility": "conservative" | "high_volatility" | "historical",
+        "expected_annual_return": float,
+        "standard_deviation": float,
+        "inflation_rate": float,
+        "sequence_of_returns_risk": "enabled" | "disabled"
+    }
+    
+    Returns Monte Carlo simulation results including:
+    - Percentile projections over time (age-based)
+    - Success probability
+    - Key insights and recommendations
+    - Configuration parameters
+    """
+    try:
+        basic_info = BasicInformation.objects.get(client_id=client_id)
+        
+        # Get the latest projection
+        projection = basic_info.projections.first()
+        
+        if not projection:
+            return Response(
+                {'error': f'No projection found for client_id {client_id}. Please run calculation first.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        yearly_breakdown = projection.yearly_breakdown if projection.yearly_breakdown else []
+        
+        # Initialize variables for both POST and GET
+        monte_carlo_data = {}
+        monte_carlo_results = None
+        accounts = basic_info.investment_accounts.all()  # Define accounts for both POST and GET
+        
+        # If POST, run new simulation with custom parameters
+        if request.method == 'POST':
+            # Validate configuration using serializer
+            config_serializer = MonteCarloConfigurationSerializer(data=request.data)
+            if not config_serializer.is_valid():
+                return Response(
+                    config_serializer.errors,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Extract validated configuration
+            validated_data = config_serializer.validated_data
+            num_simulations = validated_data['num_simulations']
+            market_volatility = validated_data['market_volatility']
+            expected_annual_return = validated_data['expected_annual_return'] / 100  # Convert to decimal
+            standard_deviation = validated_data['standard_deviation'] / 100  # Convert to decimal
+            inflation_rate = validated_data['inflation_rate'] / 100  # Convert to decimal
+            sequence_of_returns_risk = validated_data['sequence_of_returns_risk']
+            
+            # Store original percentage values for response
+            expected_annual_return_percent = validated_data['expected_annual_return']
+            standard_deviation_percent = validated_data['standard_deviation']
+            inflation_rate_percent = validated_data['inflation_rate']
+            
+            # Split yearly breakdown into accumulation and withdrawal phases
+            accumulation_breakdown = []
+            withdrawal_breakdown = []
+            
+            for year_data in yearly_breakdown:
+                if year_data.get('phase') == 'accumulation':
+                    accumulation_breakdown.append(year_data)
+                elif year_data.get('phase') == 'retirement':
+                    withdrawal_breakdown.append(year_data)
+            
+            years_to_retirement = len(accumulation_breakdown)
+            years_in_retirement = len(withdrawal_breakdown)
+            
+            # Run enhanced Monte Carlo simulation with time series
+            from calculator.services.monte_carlo_enhanced import run_monte_carlo_with_time_series
+            
+            monte_carlo_results = run_monte_carlo_with_time_series(
+                accumulation_breakdown=accumulation_breakdown,
+                withdrawal_breakdown=withdrawal_breakdown,
+                years_to_retirement=years_to_retirement,
+                years_in_retirement=years_in_retirement,
+                expected_return=expected_annual_return,
+                return_volatility=standard_deviation,
+                num_simulations=num_simulations
+            )
+            
+            # Update projection with new Monte Carlo data
+            projection.monte_carlo_data = monte_carlo_results
+            projection.success_probability = Decimal(str(round(monte_carlo_results.get('success_probability', 0.0), 1)))
+            projection.percentile_10 = Decimal(str(round(monte_carlo_results.get('percentile_10', 0.0), 2))) if monte_carlo_results.get('percentile_10') is not None else None
+            projection.percentile_25 = Decimal(str(round(monte_carlo_results.get('percentile_25', 0.0), 2))) if monte_carlo_results.get('percentile_25') is not None else None
+            projection.percentile_50 = Decimal(str(round(monte_carlo_results.get('percentile_50', 0.0), 2))) if monte_carlo_results.get('percentile_50') is not None else None
+            projection.percentile_75 = Decimal(str(round(monte_carlo_results.get('percentile_75', 0.0), 2))) if monte_carlo_results.get('percentile_75') is not None else None
+            projection.percentile_90 = Decimal(str(round(monte_carlo_results.get('percentile_90', 0.0), 2))) if monte_carlo_results.get('percentile_90') is not None else None
+            projection.save()
+            
+            # Use newly calculated results
+            monte_carlo_data = monte_carlo_results
+        else:
+            # GET request - use existing Monte Carlo data
+            monte_carlo_data = projection.monte_carlo_data if projection.monte_carlo_data else {}
+            
+            # GET request - use defaults or from projection
+            num_simulations = 1000
+            market_volatility = 'historical'
+            total_balance = sum(float(acc.balance) / 100 for acc in accounts)
+            weighted_return = 0.05
+            if total_balance > 0:
+                from calculator.services.preprocessing import get_account_return_profile
+                weighted_return = sum(
+                    (float(acc.balance) / 100) * get_account_return_profile(acc)['expected_return']
+                    for acc in accounts
+                ) / total_balance
+            expected_annual_return_percent = weighted_return * 100
+            standard_deviation_percent = 15.0
+            inflation_rate_percent = float(basic_info.inflation_rate) if basic_info.inflation_rate else 2.5
+            sequence_of_returns_risk = 'enabled'
+        
+        # Get time series data from monte_carlo_data
+        time_series = monte_carlo_data.get('time_series', {})
+        
+        # If no time series, use yearly breakdown as fallback
+        if not time_series or not time_series.get('ages'):
+            ages = []
+            balances = []
+            for year_data in yearly_breakdown:
+                ages.append(year_data.get('age', 0))
+                balances.append(year_data.get('ending_balance', 0.0))
+            
+            # Use single projection as median (since we don't have full MC time series)
+            time_series = {
+                'ages': ages,
+                'percentile_10': balances,
+                'percentile_25': balances,
+                'percentile_50': balances,
+                'percentile_75': balances,
+                'percentile_90': balances
+            }
+        
+        # Get retirement goal
+        retirement_goal = float(projection.savings_needed) if projection.savings_needed else 0.0
+        
+        # Calculate success probability
+        success_probability = float(projection.success_probability) if projection.success_probability else 0.0
+        
+        # Get percentile values at retirement
+        percentile_10_at_retirement = float(projection.percentile_10) if projection.percentile_10 else 0.0
+        percentile_25_at_retirement = float(projection.percentile_25) if projection.percentile_25 else 0.0
+        percentile_50_at_retirement = float(projection.percentile_50) if projection.percentile_50 else 0.0
+        percentile_75_at_retirement = float(projection.percentile_75) if projection.percentile_75 else 0.0
+        percentile_90_at_retirement = float(projection.percentile_90) if projection.percentile_90 else 0.0
+        
+        # Generate key insights
+        insights = []
+        
+        # Strong Position insight
+        if success_probability >= 90:
+            insights.append({
+                'type': 'strong_position',
+                'icon': 'checkmark',
+                'color': 'green',
+                'title': 'Strong Position',
+                'message': f'You have a {success_probability:.0f}% probability of meeting your retirement goals.',
+                'submessage': 'Your current savings rate and investment strategy are working well.'
+            })
+        elif success_probability >= 70:
+            insights.append({
+                'type': 'good_position',
+                'icon': 'checkmark',
+                'color': 'green',
+                'title': 'Good Position',
+                'message': f'You have a {success_probability:.0f}% probability of meeting your retirement goals.',
+                'submessage': 'Your plan is on track, but consider optimizing for better outcomes.'
+            })
+        
+        # Consider This insight (worst case)
+        if percentile_10_at_retirement > 0:
+            worst_case_shortfall = max(0, retirement_goal - percentile_10_at_retirement)
+            if worst_case_shortfall > 0:
+                # Calculate additional monthly needed for worst case
+                years_to_retirement = projection.retirement_age - basic_info.current_age
+                if years_to_retirement > 0:
+                    monthly_return = (1 + weighted_return) ** (1/12) - 1
+                    months_to_retirement = years_to_retirement * 12
+                    if monthly_return > 0:
+                        fv_factor = ((1 + monthly_return) ** months_to_retirement - 1) / monthly_return
+                        additional_monthly = worst_case_shortfall / fv_factor if fv_factor > 0 else 0
+                    else:
+                        additional_monthly = worst_case_shortfall / months_to_retirement
+                    
+                    insights.append({
+                        'type': 'consider_this',
+                        'icon': 'exclamation',
+                        'color': 'orange',
+                        'title': 'Consider This',
+                        'message': f'In worst-case scenarios (10th percentile), you\'d have ${percentile_10_at_retirement:,.0f} at retirement.',
+                        'submessage': f'Consider increasing contributions by ${additional_monthly:,.0f}/month for additional safety.'
+                    })
+        
+        # Optimization tip
+        # Check if RRSP could be more aggressive
+        rrsp_accounts = [acc for acc in accounts if acc.account_type and acc.account_type.upper() == 'RRSP']
+        if rrsp_accounts:
+            rrsp_profile = rrsp_accounts[0].investment_profile.lower() if rrsp_accounts[0].investment_profile else 'balanced'
+            if rrsp_profile in ['conservative', 'balanced'] and basic_info.current_age < 50:
+                insights.append({
+                    'type': 'optimization_tip',
+                    'icon': 'lightbulb',
+                    'color': 'blue',
+                    'title': 'Optimization Tip',
+                    'message': 'Your RRSP allocation could be more aggressive given your age.',
+                    'submessage': 'Consider shifting to 70/30 stocks/bonds mix to potentially improve outcomes.'
+                })
+        
+        response_data = {
+            'client_id': client_id,
+            'projection_id': projection.id,
+            'retirement_goal': retirement_goal,
+            'retirement_age': projection.retirement_age,
+            'current_age': basic_info.current_age,
+            'success_probability': success_probability,
+            'configuration': {
+                'num_simulations': num_simulations,
+                'market_volatility': market_volatility,
+                'expected_annual_return': round(expected_annual_return_percent, 2),
+                'standard_deviation': round(standard_deviation_percent, 2),
+                'inflation_rate': round(inflation_rate_percent, 2),
+                'sequence_of_returns_risk': sequence_of_returns_risk,
+                'volatility_model': 'normal_distribution'
+            },
+            'percentiles_at_retirement': {
+                'percentile_10': percentile_10_at_retirement,
+                'percentile_25': percentile_25_at_retirement,
+                'percentile_50': percentile_50_at_retirement,
+                'percentile_75': percentile_75_at_retirement,
+                'percentile_90': percentile_90_at_retirement
+            },
+            'time_series': time_series,
+            'insights': insights,
+            'chart_data': {
+                'retirement_goal': retirement_goal,
+                'percentile_lines': [
+                    {
+                        'label': '90th Percentile (Best 10%)',
+                        'percentile': 90,
+                        'color': 'green',
+                        'data': time_series.get('percentile_90', [])
+                    },
+                    {
+                        'label': '75th Percentile',
+                        'percentile': 75,
+                        'color': 'light_green',
+                        'data': time_series.get('percentile_75', [])
+                    },
+                    {
+                        'label': 'Median (50th Percentile)',
+                        'percentile': 50,
+                        'color': 'dark_purple',
+                        'data': time_series.get('percentile_50', [])
+                    },
+                    {
+                        'label': '25th Percentile',
+                        'percentile': 25,
+                        'color': 'light_purple',
+                        'data': time_series.get('percentile_25', [])
+                    },
+                    {
+                        'label': '10th Percentile (Worst 10%)',
+                        'percentile': 10,
+                        'color': 'red',
+                        'data': time_series.get('percentile_10', [])
+                    }
+                ]
+            }
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+        
+    except BasicInformation.DoesNotExist:
+        return Response(
+            {'error': f'Basic information with client_id {client_id} not found.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        return Response(
+            {'error': f'Error retrieving Monte Carlo data: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

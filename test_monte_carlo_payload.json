@@ -1,0 +1,9 @@
+{
+  "num_simulations": 10000,
+  "market_volatility": "historical",
+  "expected_annual_return": 5.5,
+  "standard_deviation": 15.0,
+  "inflation_rate": 2.5,
+  "sequence_of_returns_risk": "enabled"
+}
+

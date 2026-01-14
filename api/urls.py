@@ -5,7 +5,8 @@ from .views import (
     delete_basic_information,
     calculate_retirement,
     get_breakdown,
-    get_projection
+    get_projection,
+    get_monte_carlo
 )
 
 urlpatterns = [
@@ -15,4 +16,5 @@ urlpatterns = [
     path('calculate-retirement/<int:client_id>/', calculate_retirement, name='calculate-retirement'),
     path('breakdown/<int:client_id>/', get_breakdown, name='breakdown'),
     path('projection/<int:client_id>/', get_projection, name='projection'),
+    path('monte-carlo/<int:client_id>/', get_monte_carlo, name='monte-carlo'),
 ]
