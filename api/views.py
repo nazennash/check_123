@@ -500,8 +500,33 @@ def get_monte_carlo(request, client_id):
         # Get retirement goal
         retirement_goal = float(projection.savings_needed) if projection.savings_needed else 0.0
         
-        # Calculate success probability
-        success_probability = float(projection.success_probability) if projection.success_probability else 0.0
+        # Use the newly calculated success probability from Monte Carlo results
+        # This ensures we're using the latest simulation, not stale projection data
+        success_probability = float(monte_carlo_results.get('success_probability', 0.0)) if monte_carlo_results.get('success_probability') is not None else 0.0
+        
+        # Debug: Check why retirement_goal might be 0
+        print(f"\n[DEBUG] Retirement Goal Analysis:")
+        print(f"  Projection savings_needed: {projection.savings_needed}")
+        print(f"  Retirement goal (float): ${retirement_goal:,.2f}")
+        print(f"  Projected savings: ${float(projection.projected_savings) if projection.projected_savings else 0.0:,.2f}")
+        print(f"  Extra savings: ${float(projection.extra_savings) if projection.extra_savings else 0.0:,.2f}")
+        
+        # Check withdrawal breakdown to see if withdrawals are actually 0
+        total_withdrawals_in_breakdown = sum(
+            year_data.get('withdrawal_needed', 0.0) 
+            for year_data in withdrawal_breakdown
+        )
+        print(f"  Total withdrawals in breakdown: ${total_withdrawals_in_breakdown:,.2f}")
+        
+        # If retirement_goal is 0, it means government benefits cover all income needs
+        # In this case, success_probability should reflect portfolio sustainability, not withdrawal coverage
+        if retirement_goal == 0.0:
+            print(f"\n[NOTE] Retirement goal is $0 - government benefits cover all income needs")
+            print(f"  Success probability reflects portfolio sustainability (balance never goes to 0)")
+            if total_withdrawals_in_breakdown == 0.0:
+                print(f"  WARNING: No withdrawals needed in breakdown - this explains 100% success probability")
+            else:
+                print(f"  WARNING: Withdrawals exist in breakdown but savings_needed is 0 - possible calculation issue!")
         
         # Get percentile values at retirement
         percentile_10_at_retirement = float(projection.percentile_10) if projection.percentile_10 else 0.0

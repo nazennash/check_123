@@ -4,7 +4,16 @@ from .models import BasicInformation, WorkPension, InvestmentAccount, LifeEvent
 
 @admin.register(WorkPension)
 class WorkPensionAdmin(admin.ModelAdmin):
-    list_display = ['id', 'has_pension', 'monthly_pension_amount', 'pension_start_age']
+    list_display = ['id', 'basic_information', 'client_id', 'has_pension', 'monthly_pension_amount', 'pension_start_age', 'created_at']
+    list_filter = ['has_pension', 'pension_start_age', 'created_at']
+    search_fields = ['basic_information__client_id', 'basic_information__user_id']
+    list_select_related = ['basic_information']  # Optimize queries
+    
+    def client_id(self, obj):
+        """Display client_id for easier filtering"""
+        return obj.basic_information.client_id if obj.basic_information else None
+    client_id.short_description = 'Client ID'
+    client_id.admin_order_field = 'basic_information__client_id'
 
 
 @admin.register(BasicInformation)

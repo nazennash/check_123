@@ -139,7 +139,13 @@ def run_monte_carlo_simulation(
     ending_balances = []
     successful_scenarios = 0
     
+    # Track if there are any withdrawals needed (for debugging)
+    total_withdrawals = sum(year_data.get('withdrawal_needed', 0.0) for year_data in withdrawal_breakdown)
+    print(f"  Total withdrawals needed across retirement: ${total_withdrawals:,.2f}")
+    
     for sim_num in range(num_simulations):
+        went_bankrupt = False  # Track if balance ever went to 0 during withdrawal phase
+        
         if include_time_series:
             # Enhanced mode: Simulate both accumulation and withdrawal phases
             balance = starting_balance
@@ -178,6 +184,7 @@ def run_monte_carlo_simulation(
                 
                 # Check if bankrupt before processing this year
                 if balance <= 0:
+                    went_bankrupt = True
                     # Track bankrupt state for this age
                     path.append({
                         'age': age,
@@ -188,15 +195,21 @@ def run_monte_carlo_simulation(
                 # Apply withdrawal and life events based on timing
                 if contributions_at_beginning:
                     balance = balance - withdrawal + life_event
+                    if balance <= 0:
+                        went_bankrupt = True
                     balance = max(0.0, balance)
                 
                 # Apply random return
                 random_return = random.gauss(expected_return, return_volatility)
                 balance = balance * (1 + random_return)
+                if balance <= 0:
+                    went_bankrupt = True
                 balance = max(0.0, balance)
                 
                 if not contributions_at_beginning:
                     balance = balance - withdrawal + life_event
+                    if balance <= 0:
+                        went_bankrupt = True
                     balance = max(0.0, balance)
                 
                 path.append({
@@ -213,6 +226,7 @@ def run_monte_carlo_simulation(
             for year_data in withdrawal_breakdown:
                 # Check for bankruptcy
                 if balance <= 0:
+                    went_bankrupt = True
                     break
                 
                 withdrawal = year_data.get('withdrawal_needed', 0.0)
@@ -221,21 +235,29 @@ def run_monte_carlo_simulation(
                 # Apply based on timing assumption
                 if contributions_at_beginning:
                     balance = balance - withdrawal + life_event
+                    if balance <= 0:
+                        went_bankrupt = True
                     balance = max(0.0, balance)
                 
                 # Apply random return
                 random_return = random.gauss(expected_return, return_volatility)
                 balance = balance * (1 + random_return)
+                if balance <= 0:
+                    went_bankrupt = True
                 balance = max(0.0, balance)
                 
                 if not contributions_at_beginning:
                     balance = balance - withdrawal + life_event
+                    if balance <= 0:
+                        went_bankrupt = True
                     balance = max(0.0, balance)
             
             final_balance = balance
         
         ending_balances.append(final_balance)
-        if final_balance > 0:
+        # Success = balance never went to 0 during withdrawal phase AND final balance > 0
+        # If there are no withdrawals needed (total_withdrawals == 0), success means balance stayed positive
+        if not went_bankrupt and final_balance > 0:
             successful_scenarios += 1
         
         if (sim_num + 1) % 1000 == 0 and num_simulations > 1000:
