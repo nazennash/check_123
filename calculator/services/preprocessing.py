@@ -912,9 +912,31 @@ def preprocess_life_events(basic_info: BasicInformation) -> List[Dict[str, Any]]
         amount_dollars = amount_cents / 100
         print(f"      Amount: {amount_cents:,.2f} cents = ${amount_dollars:,.2f}")
         
-        duration_years = max(1, event.end_age - event.start_age) if event.end_age > event.start_age else 1
+        # Calculate duration based on frequency type
+        if event.frequency == 'one_time':
+            # One-time events happen once at start_age, duration is 1 year
+            duration_years = 1
+            print(f"      Frequency: one_time → Duration: 1 year (happens once at age {event.start_age})")
+        elif event.frequency == 'annually':
+            # Annual events happen every year from start_age to end_age (inclusive)
+            if event.end_age > event.start_age:
+                duration_years = event.end_age - event.start_age + 1  # Inclusive: ages 38-49 = 12 years
+            else:
+                duration_years = 1
+            print(f"      Frequency: annually → Duration: {duration_years} years (happens at ages {event.start_age} to {event.end_age})")
+        elif event.frequency == 'monthly':
+            # Monthly events happen every month from start_age to end_age
+            if event.end_age > event.start_age:
+                duration_years = event.end_age - event.start_age  # Span in years (e.g., 38-49 = 12 years)
+            else:
+                duration_years = 1
+            print(f"      Frequency: monthly → Duration: {duration_years} years (happens every month from age {event.start_age} to {event.end_age})")
+        else:
+            # Default: treat as one-time if frequency is unknown
+            duration_years = 1
+            print(f"      Frequency: {event.frequency} (unknown) → Duration: 1 year (default)")
+        
         is_recurring = event.frequency != 'one_time'
-        print(f"      Duration: {duration_years} years")
         print(f"      Is recurring: {is_recurring}")
         
         processed_event = {
